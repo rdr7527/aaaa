@@ -1,8 +1,22 @@
 @import "tailwindcss";
 
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+}
+
 :root {
-  --background: #ffffff;
+  --background: #f8f9fa;
   --foreground: #171717;
+  --primary: #0066cc;
+  --primary-light: #e6f0ff;
+  --border: #dee2e6;
+  --text-muted: #6c757d;
 }
 
 @theme inline {
@@ -16,11 +30,29 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --primary: #3b82f6;
+    --primary-light: #1e3a8a;
+    --border: #2d2d2d;
+    --text-muted: #9ca3af;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.6;
+  direction: rtl;
+  text-align: right;
+}
+
+input, button, textarea, select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+@media (max-width: 768px) {
+  html {
+    font-size: 14px;
+  }
 }
