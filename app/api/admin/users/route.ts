@@ -1,21 +1,43 @@
 import { NextResponse } from 'next/server';
 import { readUsersFile, writeUsersFile, hashPassword } from '../../../../lib/users';
 
-function isAdmin(req: Request) {
+function isAdminOrDeptManager(req: Request) {
   const cookie = req.headers.get('cookie') || '';
   const m = cookie.split(';').map(s=>s.trim()).find(s=>s.startsWith('auth='));
   if (!m) return false;
   try {
     const token = m.split('=')[1];
     const payload = JSON.parse(Buffer.from(token, 'base64').toString('utf8'));
-    return payload.role === 'admin';
+    return payload.role === 'admin' || payload.role === 'department_manager';
   } catch(e) { return false }
 }
 
+function getUserInfo(req: Request) {
+  const cookie = req.headers.get('cookie') || '';
+  const m = cookie.split(';').map(s=>s.trim()).find(s=>s.startsWith('auth='));
+  if (!m) return null;
+  try {
+    const token = m.split('=')[1];
+    const payload = JSON.parse(Buffer.from(token, 'base64').toString('utf8'));
+    return payload;
+  } catch(e) { return null }
+}
+
 export async function GET(req: Request) {
-  if (!isAdmin(req)) return NextResponse.json({ ok: false }, { status: 401 });
+  if (!isAdminOrDeptManager(req)) {
+    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 403 });
+  }
+  
+  const userInfo = getUserInfo(req);
   const data = readUsersFile();
-  const safe = (data.users || []).map((u: any) => ({
+  let users = data.users || [];
+  
+  // If department manager, filter to only users in their department
+  if (userInfo?.role === 'department_manager') {
+    users = users.filter((u: any) => u.departmentId === userInfo.departmentId);
+  }
+  
+  const safe = users.map((u: any) => ({
     id: u.id,
     name: u.name,
     role: u.role,
@@ -24,13 +46,35 @@ export async function GET(req: Request) {
   return NextResponse.json({ ok: true, users: safe });
 }
 
+function getUserRole(req: Request) {
+  const cookie = req.headers.get('cookie') || '';
+  const m = cookie.split(';').map(s=>s.trim()).find(s=>s.startsWith('auth='));
+  if (!m) return null;
+  try {
+    const token = m.split('=')[1];
+    const payload = JSON.parse(Buffer.from(token, 'base64').toString('utf8'));
+    return payload.role;
+  } catch(e) { return null }
+}
+
 export async function POST(req: Request) {
-  if (!isAdmin(req)) return NextResponse.json({ ok: false }, { status: 401 });
+  if (!isAdminOrDeptManager(req)) {
+    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 403 });
+  }
+  
+  const userInfo = getUserInfo(req);
   const body = await req.json();
   const data = readUsersFile();
   
   if ((data.users || []).find((u: any) => u.id === body.id)) {
     return NextResponse.json({ ok: false, error: 'User already exists' }, { status: 400 });
+  }
+  
+  // Department managers can only add users to their department and only as 'user' role
+  if (userInfo?.role === 'department_manager') {
+    if (body.role !== 'user' || body.departmentId !== userInfo.departmentId) {
+      return NextResponse.json({ ok: false, error: 'Department managers can only add students to their department' }, { status: 403 });
+    }
   }
   
   const user = {
@@ -48,7 +92,6 @@ export async function POST(req: Request) {
 }
 
 export async function PUT(req: Request) {
-  if (!isAdmin(req)) return NextResponse.json({ ok: false }, { status: 401 });
   const body = await req.json();
   const data = readUsersFile();
   const user = (data.users || []).find((u: any) => u.id === body.id);
@@ -64,16 +107,26 @@ export async function PUT(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  if (!isAdmin(req)) return NextResponse.json({ ok: false }, { status: 401 });
+  if (!isAdminOrDeptManager(req)) {
+    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 403 });
+  }
+  
+  const userInfo = getUserInfo(req);
   const { searchParams } = new URL(req.url);
   const userId = searchParams.get('id');
   if (!userId) return NextResponse.json({ ok: false, error: 'User ID required' }, { status: 400 });
   
   const data = readUsersFile();
-  const adminCount = (data.users || []).filter((u: any) => u.role === 'admin').length;
-  const user = (data.users || []).find((u: any) => u.id === userId);
+  const userToDelete = (data.users || []).find((u: any) => u.id === userId);
+  if (!userToDelete) return NextResponse.json({ ok: false, error: 'User not found' }, { status: 404 });
   
-  if (user && user.role === 'admin' && adminCount === 1) {
+  // Department managers can only delete users in their department
+  if (userInfo?.role === 'department_manager' && userToDelete.departmentId !== userInfo.departmentId) {
+    return NextResponse.json({ ok: false, error: 'Cannot delete users from other departments' }, { status: 403 });
+  }
+  
+  const adminCount = (data.users || []).filter((u: any) => u.role === 'admin').length;
+  if (userToDelete.role === 'admin' && adminCount === 1) {
     return NextResponse.json({ ok: false, error: 'Cannot delete last admin' }, { status: 400 });
   }
   

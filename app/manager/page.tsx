@@ -64,7 +64,8 @@ export default function ManagerPage() {
         const body = await res.json();
         const userData: User = body.user;
         if (!userData) return router.push('/login');
-        if (userData.role !== 'department_manager') return router.push('/dashboard');
+        // Redirect department managers to the unified dashboard (we show their department there)
+        if (userData.role === 'department_manager') return router.push('/dashboard');
         if (!userData.departmentId) {
           console.error('Manager has no departmentId');
           return router.push('/dashboard');
@@ -127,7 +128,7 @@ export default function ManagerPage() {
   };
 
   const handleDeleteSubject = async (subjectId: string) => {
-    if (!user || !confirm('هل تريد حذف هذا المقرر؟')) return;
+    if (!user || !confirm('هل تريد حذف هذه المادة؟')) return;
     if (!dept || !dept.id) return;
     try {
       const res = await fetch(`/api/departments/${dept.id}/subjects/${subjectId}`, { method: 'DELETE', credentials: 'include' });
@@ -153,6 +154,7 @@ export default function ManagerPage() {
   return (
     <div className={styles.container}>
       <header className={styles.header}>
+        <img src="../src/sh.jpg" alt="الشعار" style={{ width: '50px', height: '50px', objectFit: 'contain' }} />
         <div>
           <h1>لوحة التحكم - {dept.name}</h1>
           <p className={styles.subtitle}>مرحبا، {user.name}</p>
@@ -161,16 +163,16 @@ export default function ManagerPage() {
       </header>
 
       <div className={styles.tabs}>
-        <button className={`${styles.tab} ${activeTab === 'subjects' ? styles.active : ''}`} onClick={() => setActiveTab('subjects')}>المقررات</button>
+        <button className={`${styles.tab} ${activeTab === 'subjects' ? styles.active : ''}`} onClick={() => setActiveTab('subjects')}>المواد</button>
         <button className={`${styles.tab} ${activeTab === 'videos' ? styles.active : ''}`} onClick={() => setActiveTab('videos')}>الفيديوهات</button>
       </div>
 
       {activeTab === 'subjects' && (
         <div className={styles.tabContent}>
           <form onSubmit={handleAddSubject} className={styles.form}>
-            <input value={newSubjectName} onChange={(e) => setNewSubjectName(e.target.value)} placeholder="اسم المقرر" required />
-            <textarea value={newSubjectDesc} onChange={(e) => setNewSubjectDesc(e.target.value)} placeholder="وصف المقرر" rows={3} />
-            <button type="submit">إضافة مقرر</button>
+            <input value={newSubjectName} onChange={(e) => setNewSubjectName(e.target.value)} placeholder="اسم المادة" required />
+            <textarea value={newSubjectDesc} onChange={(e) => setNewSubjectDesc(e.target.value)} placeholder="وصف المادة" rows={3} />
+            <button type="submit">إضافة مادة</button>
           </form>
 
           <div className={styles.grid}>
@@ -190,7 +192,7 @@ export default function ManagerPage() {
         <div className={styles.tabContent}>
           <form onSubmit={handleAddVideo} className={styles.form}>
             <select value={selectedSubjectId} onChange={(e) => setSelectedSubjectId(e.target.value)} required>
-              <option value="">-- اختر مقرر --</option>
+              <option value="">-- اختر مادة --</option>
               {(dept.subjects || []).map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}

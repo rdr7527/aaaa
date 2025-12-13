@@ -9,6 +9,7 @@ export default function AdminPanel() {
   const [users, setUsers] = useState<any[]>([]);
   const [tab, setTab] = useState('departments');
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
   const router = useRouter();
 
   useEffect(() => {
@@ -60,7 +61,7 @@ export default function AdminPanel() {
   };
 
   const deleteSubject = async (deptId: string, subjId: string) => {
-    if (confirm('هل تريد حذف هذا المقرر؟')) {
+    if (confirm('هل تريد حذف هذه المادة؟')) {
       const res = await fetch(`/api/departments/${deptId}/subjects/${subjId}`, { method: 'DELETE' });
       if (res.ok) {
         setDepartments(departments.map(d => 
@@ -96,11 +97,25 @@ export default function AdminPanel() {
   if (loading) return <div className={styles.loading}>جارٍ التحميل...</div>;
   if (!user || user.role !== 'admin') return null;
 
+  const logout = async () => {
+    await fetch('/api/logout', { method: 'POST' });
+    router.push('/login');
+  };
+
   return (
     <div className={styles.container}>
-      <nav className={styles.navbar}>
-        <h1>إدارة النظام</h1>
-      </nav>
+      <header className={styles.navbar} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <img src="../src/sh.jpg" alt="الشعار" style={{ width: '48px', height: '48px', objectFit: 'contain' }} />
+          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
+            <span style={{ fontSize: '16px', fontWeight: 700 }}>منارة المعرفة</span>
+            <small style={{ fontSize: '12px', color: '#ffffffcc' }}>إدارة النظام</small>
+          </div>
+        </div>
+        <div>
+          <button onClick={logout} className={styles.logoutBtn} style={{ padding: '8px 12px' }}>تسجيل الخروج</button>
+        </div>
+      </header>
       
       <div className={styles.tabs}>
         <button 
@@ -113,7 +128,7 @@ export default function AdminPanel() {
           className={tab === 'subjects' ? styles.active : ''} 
           onClick={() => setTab('subjects')}
         >
-          المقررات
+          المواد
         </button>
         <button 
           className={tab === 'users' ? styles.active : ''} 
@@ -124,25 +139,31 @@ export default function AdminPanel() {
       </div>
 
       <main className={styles.main}>
+
         {tab === 'departments' && (
           <DepartmentsTab 
             departments={departments} 
             onAdd={addDept}
             onDelete={deleteDept}
+            searchTerm={searchTerm}
           />
         )}
+
         {tab === 'subjects' && (
           <SubjectsTab 
             departments={departments}
             onDelete={deleteSubject}
+            searchTerm={searchTerm}
           />
         )}
+
         {tab === 'users' && (
           <UsersTab 
             users={users} 
             departments={departments}
             onAdd={addUser}
             onDelete={deleteUser}
+            searchTerm={searchTerm}
           />
         )}
       </main>
@@ -150,7 +171,8 @@ export default function AdminPanel() {
   );
 }
 
-function DepartmentsTab({ departments, onAdd, onDelete }: any) {
+// Departments tab component (supports search)
+function DepartmentsTab({ departments, onAdd, onDelete, searchTerm }: any) {
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
 
@@ -161,6 +183,11 @@ function DepartmentsTab({ departments, onAdd, onDelete }: any) {
       setDesc('');
     }
   };
+
+  const filteredDepartments = (departments || []).filter((dept: any) =>
+    (dept.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (dept.description || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className={styles.tabContent}>
@@ -182,21 +209,23 @@ function DepartmentsTab({ departments, onAdd, onDelete }: any) {
 
       <div className={styles.list}>
         <h2>الأقسام الموجودة</h2>
-        {departments.length === 0 ? (
+        {filteredDepartments.length === 0 ? (
           <p>لا توجد أقسام</p>
         ) : (
-          departments.map((dept: any) => (
+          filteredDepartments.map((dept: any) => (
             <div key={dept.id} className={styles.item}>
               <div>
                 <h3>{dept.name}</h3>
                 <p>{dept.description}</p>
               </div>
-              <button 
-                className={styles.deleteBtn}
-                onClick={() => onDelete(dept.id)}
-              >
-                حذف
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button 
+                  className={styles.deleteBtn}
+                  onClick={() => onDelete(dept.id)}
+                >
+                  حذف
+                </button>
+              </div>
             </div>
           ))
         )}
@@ -205,45 +234,64 @@ function DepartmentsTab({ departments, onAdd, onDelete }: any) {
   );
 }
 
-function SubjectsTab({ departments, onDelete }: any) {
+// Subjects tab (supports search inside subjects)
+function SubjectsTab({ departments, onDelete, searchTerm }: any) {
+  const filteredDepartments = (departments || []).filter((dept: any) =>
+    (dept.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (dept.subjects || []).some((s: any) =>
+      (s.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.description || '').toLowerCase().includes(searchTerm.toLowerCase())
+    )
+  );
+
   return (
     <div className={styles.tabContent}>
       <div className={styles.list}>
-        <h2>المقررات</h2>
-        {departments.length === 0 ? (
-          <p>لا توجد أقسام</p>
+        <h2>المواد</h2>
+        {filteredDepartments.length === 0 ? (
+          <p>لا توجد أقسام أو مواد</p>
         ) : (
-          departments.map((dept: any) => (
-            <div key={dept.id}>
-              <h3 className={styles.deptHeader}>{dept.name}</h3>
-              {(dept.subjects || []).length === 0 ? (
-                <p style={{ paddingLeft: '20px', color: '#666' }}>لا توجد مقررات</p>
-              ) : (
-                (dept.subjects || []).map((subject: any) => (
-                  <div key={subject.id} className={styles.item} style={{ marginLeft: '20px' }}>
-                    <div>
-                      <h4>{subject.name}</h4>
-                      <p>{subject.description}</p>
-                      <p style={{ fontSize: '0.9em', color: '#666' }}>{(subject.videos || []).length} فيديوهات</p>
+          filteredDepartments.map((dept: any) => {
+            const filteredSubjects = (dept.subjects || []).filter((s: any) =>
+              (s.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+              (s.description || '').toLowerCase().includes(searchTerm.toLowerCase())
+            );
+
+            if (filteredSubjects.length === 0 && searchTerm) return null;
+
+            return (
+              <div key={dept.id}>
+                <h3 className={styles.deptHeader}>{dept.name}</h3>
+                {filteredSubjects.length === 0 ? (
+                  <p style={{ paddingLeft: '20px', color: '#666' }}>لا توجد مواد</p>
+                ) : (
+                  filteredSubjects.map((subject: any) => (
+                    <div key={subject.id} className={styles.item} style={{ marginLeft: '20px' }}>
+                      <div>
+                        <h4>{subject.name}</h4>
+                        <p>{subject.description}</p>
+                        <p style={{ fontSize: '0.9em', color: '#666' }}>{(subject.videos || []).length} فيديوهات</p>
+                      </div>
+                      <button 
+                        className={styles.deleteBtn}
+                        onClick={() => onDelete(dept.id, subject.id)}
+                      >
+                        حذف
+                      </button>
                     </div>
-                    <button 
-                      className={styles.deleteBtn}
-                      onClick={() => onDelete(dept.id, subject.id)}
-                    >
-                      حذف
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          ))
+                  ))
+                )}
+              </div>
+            );
+          })
         )}
       </div>
     </div>
   );
 }
 
-function UsersTab({ users, onAdd, onDelete, departments }: any) {
+// Users tab with search
+function UsersTab({ users, onAdd, onDelete, departments, searchTerm }: any) {
   const [userId, setUserId] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState('user');
@@ -260,6 +308,12 @@ function UsersTab({ users, onAdd, onDelete, departments }: any) {
       setDepartmentId('');
     }
   };
+
+  const filteredUsers = (users || []).filter((u: any) =>
+    (u.id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (u.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (u.role || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className={styles.tabContent}>
@@ -297,10 +351,10 @@ function UsersTab({ users, onAdd, onDelete, departments }: any) {
 
       <div className={styles.list}>
         <h2>المستخدمين</h2>
-        {users.length === 0 ? (
+        {filteredUsers.length === 0 ? (
           <p>لا يوجد مستخدمين</p>
         ) : (
-          users.map((u: any) => {
+          filteredUsers.map((u: any) => {
             const dept = (departments || []).find((d: any) => d.id === u.departmentId);
             return (
               <div key={u.id} className={styles.item}>

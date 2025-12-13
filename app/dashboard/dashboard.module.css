@@ -2,14 +2,16 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--background);
+  background: #f8f9fa;
+  font-family: 'Tajawal', 'Cairo', system-ui, -apple-system, sans-serif;
+  direction: rtl;
 }
 
 .navbar {
-  background: var(--primary);
+  background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
   color: white;
   padding: 1rem 2rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(13, 71, 161, 0.15);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -29,41 +31,48 @@
   font-size: 1.5rem;
   font-weight: 700;
   margin: 0;
+  letter-spacing: 0.3px;
 }
 
 .userMenu {
   display: flex;
   align-items: center;
   gap: 1rem;
+  font-weight: 500;
 }
 
 .logoutBtn {
   background: rgba(255, 255, 255, 0.2);
   color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.4);
   padding: 0.5rem 1rem;
   border-radius: 4px;
   cursor: pointer;
-  transition: background 0.3s;
+  transition: all 0.3s;
   font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
 }
 
 .logoutBtn:hover {
   background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
 }
 
 .adminLink {
   color: white;
   text-decoration: none;
   padding: 0.5rem 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 4px;
-  transition: background 0.3s;
+  transition: all 0.3s;
   font-size: 0.875rem;
+  font-weight: 600;
 }
 
 .adminLink:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
 }
 
 .main {
@@ -75,17 +84,17 @@
 }
 
 .card {
-  background: var(--background);
+  background: white;
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e3f2fd;
   overflow: hidden;
 }
 
 .cardHeader {
-  background: linear-gradient(135deg, var(--primary-light) 0%, var(--background) 100%);
+  background: linear-gradient(135deg, #f8f9fa 0%, white 100%);
   padding: 2rem;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 2px solid #e3f2fd;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -96,17 +105,19 @@
 .cardHeader h2 {
   font-size: 1.75rem;
   font-weight: 700;
-  color: var(--foreground);
+  color: #0d47a1;
   margin: 0;
+  letter-spacing: 0.3px;
 }
 
 .role {
-  background: var(--primary);
+  background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
   color: white;
   padding: 0.5rem 1rem;
   border-radius: 20px;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.5px;
 }
 
 .content {
