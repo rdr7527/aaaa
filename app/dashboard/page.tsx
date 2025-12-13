@@ -26,8 +26,6 @@ export default function Dashboard() {
   const [userFilter, setUserFilter] = useState('all');
   const router = useRouter();
 
-const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
-  
   useEffect(()=>{
     (async ()=>{
       try {
