@@ -1541,7 +1541,7 @@ function AddUserForm({ departments, subjects, onAdd, allowedRoles = ['user', 'te
           style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
         >
           <option value="">اختر القسم (اختياري)</option>
-          {departments.map((dept) => (
+          {departments?.map((dept) => (
             <option key={dept.id} value={dept.id}>{dept.name}</option>
           ))}
         </select>
@@ -1603,7 +1603,7 @@ function AddTeacherForm({ departments, onAdd }: { departments: any[], onAdd: (us
         style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
       >
         <option value="">اختر القسم</option>
-        {departments.map((dept) => (
+        {departments?.map((dept) => (
           <option key={dept.id} value={dept.id}>{dept.name}</option>
         ))}
       </select>
@@ -1658,7 +1658,7 @@ function AddSubjectForm({ departments = [], teachers = [], onAdd, user }: { depa
           style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
         >
           <option value="">اختر القسم</option>
-          {departments.map((dept) => (
+          {departments?.map((dept) => (
             <option key={dept.id} value={dept.id}>{dept.name}</option>
           ))}
         </select>
