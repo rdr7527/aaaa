@@ -7,7 +7,6 @@ import styles from './login.module.css';
 export default function LoginPage() {
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -39,14 +38,6 @@ export default function LoginPage() {
     }
   };
 
-  const handleRegisterClick = () => {
-    router.push('/register');
-  };
-
-  const togglePasswordVisibility = () => {
-    setShowPassword(!showPassword);
-  };
-
   return (
     <div className={styles.container}>
       <div className={styles.card}>
@@ -71,36 +62,13 @@ export default function LoginPage() {
 
           <div className={styles.group}>
             <label>كلمة السر</label>
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-              <input
-                type={showPassword ? 'text' : 'password'}
-                placeholder="أدخل كلمة السر"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={loading}
-                style={{ paddingLeft: '40px' }}
-              />
-              <button
-                type="button"
-                onClick={togglePasswordVisibility}
-                style={{
-                  position: 'absolute',
-                  left: '12px',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: '#666666',
-                  fontSize: '18px',
-                  padding: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-                tabIndex={-1}
-              >
-                {showPassword ? '👁️' : '👁️‍🗨️'}
-              </button>
-            </div>
+            <input
+              type="password"
+              placeholder="أدخل كلمة السر"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
+            />
           </div>
 
           <button className={styles.button} type="submit" disabled={loading}>
@@ -109,13 +77,6 @@ export default function LoginPage() {
         </form>
 
         <p className={styles.footer}>بيانات المسؤول الافتراضية: admin / admin123</p>
-
-        <p className={styles.registerLink}>
-          ليس لديك حساب؟{' '}
-          <a onClick={handleRegisterClick} style={{ color: '#4a90e2', cursor: 'pointer', fontWeight: '500', textDecoration: 'none' }}>
-            إنشاء حساب جديد
-          </a>
-        </p>
       </div>
     </div>
   );

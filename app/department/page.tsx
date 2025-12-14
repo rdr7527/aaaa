@@ -181,20 +181,7 @@ export default function DepartmentPage() {
           )}
 
           <div className={styles.content}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-              <h3>المواد الدراسية</h3>
-              {user.role === 'department_manager' && (
-                <div>
-                  <button
-                    onClick={() => setShowAddAssignment(s => !s)}
-                    style={{ padding: '10px 16px', background: '#000', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer' }}
-                  >
-                    {showAddAssignment ? 'إلغاء' : 'إضافة واجب'}
-                  </button>
-                </div>
-              )}
-            </div>
-
+          
             {showAddAssignment && user.role === 'department_manager' && (
               <div style={{ margin: '12px 0', padding: 12, border: '1px solid #ccc', borderRadius: 8, maxWidth: 720 }}>
                 <AddAssignmentForm

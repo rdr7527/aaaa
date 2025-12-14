@@ -24,6 +24,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('departments');
   const [teacherSubTab, setTeacherSubTab] = useState('add-teacher');
   const [userFilter, setUserFilter] = useState('all');
+  const [teacherFilter, setTeacherFilter] = useState('all');
   const router = useRouter();
 
 const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
@@ -35,9 +36,16 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
           if (res.status === 200) {
           const data = await res.json();
           setUser(data.user);
-          // Keep department managers on the dashboard (don't redirect to /manager)
+          // Keep teachers on the dashboard
           // For other department users (students) keep existing behavior and send to /department
+          // Department managtment managers go to deputy
           if (data.user.role !== 'admin' && data.user.role !== 'department_manager' && data.user.role !== 'teacher' && data.user.departmentId) {
+            router.push('/department');
+          }
+          // Keep department managers on the dashboard
+          // Teachers go to deputy
+          if (data.user.role === 'teacher') return router.push('/deputy');
+          if (data.user.role !== 'admin' && data.user.role !== 'department_manager' && data.user.departmentId) {
             router.push('/department');
           }
         } else {
@@ -460,25 +468,6 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     }
   };
 
-  const scrollToAddVideo = () => {
-    setActiveTab('videos');
-    // Poll for the element because React state update may re-render the videos tab
-    const start = Date.now();
-    const tryFind = () => {
-      const el = document.getElementById('add-video-form');
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        const input = el.querySelector('input, textarea, select') as HTMLElement | null;
-        if (input) input.focus();
-        return;
-      }
-      if (Date.now() - start < 1200) {
-        setTimeout(tryFind, 100);
-      }
-    };
-    setTimeout(tryFind, 80);
-  };
-
   const [selectedVideo, setSelectedVideo] = useState<{ video: any; subjectId?: string } | null>(null);
 
   const [addModalType, setAddModalType] = useState<'subject' | 'video' | 'assignment' | 'student' | null>(null);
@@ -523,7 +512,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   const filteredTeachers = teachers.filter(t => 
     (t.id || '').includes(searchTerm) || 
     (t.name || '').includes(searchTerm)
-  );
+  ).filter(t => teacherFilter === 'all' || t.role === teacherFilter);
 
   const students = users.filter(u => u.role === 'user');
   const filteredStudents = students.filter(s => 
@@ -550,7 +539,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     <div className={styles.container}>
       <nav className={styles.navbar}>
         <div className={styles.navContent}>
-          <img src="../src/sh.jpg" alt="الشعار" style={{ width: '50px', height: '50px', objectFit: 'contain' }} />
+          <img src="../src/sh.jpg" alt="الشعار" className={styles.logo} />
           <div className={styles.userMenu}>
             <span>{user.id}</span>
             <button onClick={logout} className={styles.logoutBtn}>تسجيل الخروج</button>
@@ -567,49 +556,27 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                 <p className={styles.role}>مسؤول</p>
               </div>
               <div className={styles.content}>
-                <div style={{ marginBottom: '20px' }}>
+                <div className={styles.searchSection}>
                   <input
                     type="text"
                     placeholder="ابحث عن قسم أو مادة أو فيديو..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '10px',
-                      borderRadius: '4px',
-                      border: '1px solid #000',
-                      fontSize: '14px',
-                    }}
+                    className={styles.searchInput}
                   />
                 </div>
 
-                <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', borderBottom: '1px solid #000', paddingBottom: '10px' }}>
+                <div className={styles.tabs}>
                   <button 
                     onClick={() => setActiveTab('departments')}
-                    style={{
-                      padding: '10px 20px',
-                      background: activeTab === 'departments' ? '#1565c0' : '#f0f0f0',
-                      color: activeTab === 'departments' ? 'white' : '#333',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                    }}
+                    className={`${styles.tabButton} ${activeTab === 'departments' ? styles.active : ''}`}
                   >
                     إدارة الأقسام ({filteredDepartments.length})
                   </button>
                   {user.role === 'admin' && (
                     <button 
                       onClick={() => setActiveTab('users')}
-                      style={{
-                        padding: '10px 20px',
-                        background: activeTab === 'users' ? '#1565c0' : '#f0f0f0',
-                        color: activeTab === 'users' ? 'white' : '#333',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '14px',
-                      }}
+                      className={`${styles.tabButton} ${activeTab === 'users' ? styles.active : ''}`}
                     >
                       إدارة المستخدمين ({filteredUsers.length})
                     </button>
@@ -617,15 +584,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                   {user.role === 'admin' && (
                     <button 
                       onClick={() => setActiveTab('teachers')}
-                      style={{
-                        padding: '10px 20px',
-                        background: activeTab === 'teachers' ? '#1565c0' : '#f0f0f0',
-                        color: activeTab === 'teachers' ? 'white' : '#333',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '14px',
-                      }}
+                      className={`${styles.tabButton} ${activeTab === 'teachers' ? styles.active : ''}`}
                     >
                       أعضاء هيئة التدريس ({teachers.length})
                     </button>
@@ -634,30 +593,14 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                     <>
                       <button 
                         onClick={() => setActiveTab('subjects')}
-                        style={{
-                          padding: '10px 20px',
-                          background: activeTab === 'subjects' ? '#1565c0' : '#f0f0f0',
-                          color: activeTab === 'subjects' ? 'white' : '#333',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                        }}
+                        className={`${styles.tabButton} ${activeTab === 'subjects' ? styles.active : ''}`}
                       >
                         إدارة المواد ({filteredSubjects.length})
                       </button>
                       {user.role === 'department_manager' && (
                       <button 
                         onClick={() => setActiveTab('videos')}
-                        style={{
-                          padding: '10px 20px',
-                          background: activeTab === 'videos' ? '#1565c0' : '#f0f0f0',
-                          color: activeTab === 'videos' ? 'white' : '#333',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                        }}
+                        className={`${styles.tabButton} ${activeTab === 'videos' ? styles.active : ''}`}
                       >
                         إدارة الفيديوهات ({filteredVideos.length})
                       </button>
@@ -669,52 +612,31 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                 {activeTab === 'departments' && (
                   <div>
                     {user.role === 'admin' && (
-                      <div style={{ marginBottom: '30px', padding: '20px', border: '1px solid #000', borderRadius: '8px' }}>
+                      <div className={styles.addForm}>
                         <h4>إضافة قسم جديد</h4>
                         <AddDepartmentForm onAdd={handleAddDept} />
                       </div>
                     )}
                     <h3>الأقسام الدراسية</h3>
                     {filteredDepartments.length === 0 ? (
-                      <p style={{ color: '#000' }}>لا توجد أقسام</p>
+                      <p className={styles.noData}>لا توجد أقسام</p>
                     ) : (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
+                      <div className={styles.departmentsGrid}>
                         {filteredDepartments.map(dept => (
-                          <div key={dept.id} style={{
-                            border: '1px solid #000',
-                            padding: '15px',
-                            borderRadius: '8px',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                          }}>
-                            <h4 style={{ margin: '0 0 10px 0' }}>{dept.name}</h4>
-                            <p style={{ color: '#666', fontSize: '14px', margin: '0 0 15px 0' }}>{dept.description}</p>
-                            <div style={{ display: 'flex', gap: '8px' }}>
+                          <div key={dept.id} className={styles.departmentCard}>
+                            <h4 className={styles.cardTitle}>{dept.name}</h4>
+                            <p className={styles.cardDesc}>{dept.description}</p>
+                            <div className={styles.cardActions}>
                               <button 
                                 onClick={() => handleEditDept(dept.id)}
-                                style={{
-                                  padding: '8px 16px',
-                                  background: '#0d47a1',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: 'pointer',
-                                  fontSize: '12px',
-                                }}
+                                className={styles.editBtn}
                               >
                                 تعديل
                               </button>
                               {user.role === 'admin' && (
                                 <button 
                                   onClick={() => handleDeleteDept(dept.id)}
-                                  style={{
-                                    padding: '8px 16px',
-                                    background: '#d32f2f',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    cursor: 'pointer',
-                                    fontSize: '12px',
-                                  }}
+                                  className={styles.deleteBtn}
                                 >
                                   حذف
                                 </button>
@@ -734,97 +656,62 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                       <AddUserForm departments={departments} onAdd={handleAddUser} />
                     </div>
                     <h3>المستخدمين</h3>
-                    <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <div className={styles.subTabs}>
                       <button 
                         onClick={() => setUserFilter('all')}
-                        style={{
-                          padding: '8px 16px',
-                          background: userFilter === 'all' ? '#1565c0' : '#f0f0f0',
-                          color: userFilter === 'all' ? 'white' : '#333',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                        }}
+                        className={`${styles.tabButton} ${userFilter === 'all' ? styles.active : ''}`}
                       >
                         الكل ({users.length})
                       </button>
                       <button 
                         onClick={() => setUserFilter('user')}
-                        style={{
-                          padding: '8px 16px',
-                          background: userFilter === 'user' ? '#1565c0' : '#f0f0f0',
-                          color: userFilter === 'user' ? 'white' : '#333',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                        }}
+                        className={`${styles.tabButton} ${userFilter === 'user' ? styles.active : ''}`}
                       >
                         مستخدم عادي ({users.filter(u => u.role === 'user').length})
                       </button>
                       <button 
-                        onClick={() => setUserFilter('department_manager')}
-                        style={{
-                          padding: '8px 16px',
-                          background: userFilter === 'department_manager' ? '#1565c0' : '#f0f0f0',
-                          color: userFilter === 'department_manager' ? 'white' : '#333',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                        }}
+                        onClick={() => setUserFilter('teacher')}
+                        className={`${styles.tabButton} ${userFilter === 'teacher' ? styles.active : ''}`}
                       >
-                        مسؤول قسم ({users.filter(u => u.role === 'department_manager').length})
+                        مدير القسم ({users.filter(u => u.role === 'department_manager' || u.role === 'teacher').length})
                       </button>
                       <button 
                         onClick={() => setUserFilter('admin')}
-                        style={{
-                          padding: '8px 16px',
-                          background: userFilter === 'admin' ? '#1565c0' : '#f0f0f0',
-                          color: userFilter === 'admin' ? 'white' : '#333',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                        }}
+                        className={`${styles.tabButton} ${userFilter === 'admin' ? styles.active : ''}`}
                       >
                         مسؤول النظام ({users.filter(u => u.role === 'admin').length})
                       </button>
                     </div>
                     {filteredUsers.length === 0 ? (
-                      <p style={{ color: '#000' }}>لا يوجد مستخدمين</p>
+                      <p className={styles.noData}>لا يوجد مستخدمين</p>
                     ) : (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
+                      <div className={styles.departmentsGrid}>
                         {filteredUsers.map(u => {
                           const dept = departments.find(d => d.id === u.departmentId);
                           return (
-                            <div key={u.id} style={{
-                              border: '1px solid #000',
-                              padding: '15px',
-                              borderRadius: '8px',
-                              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                            }}>
-                              <h4 style={{ margin: '0 0 10px 0' }}>{u.name || u.id}</h4>
-                              <p style={{ color: '#666', fontSize: '14px', margin: '0 0 5px 0' }}>المستخدم: {u.id}</p>
-                              <p style={{ color: '#666', fontSize: '14px', margin: '0 0 5px 0' }}>
-                                الدور: {u.role === 'admin' ? 'مسؤول النظام' : u.role === 'department_manager' ? 'مسؤول قسم' : 'مستخدم عادي'}
+                            <div key={u.id} className={styles.departmentCard}>
+                              <h4 className={styles.cardTitle}>{u.name || u.id}</h4>
+                              <p className={styles.cardDesc}>المستخدم: {u.id}</p>
+                              <p className={styles.cardDesc}>
+                                الدور: {u.role === 'admin' ? 'مسؤول النظام' : u.role === 'department_manager' ? 'دكتور' : u.role === 'teacher' ? 'مدير القسم' : 'مستخدم عادي'}
                               </p>
-                              {u.departmentId && <p style={{ color: '#666', fontSize: '14px', margin: '0 0 15px 0' }}>القسم: {dept ? dept.name : 'غير محدد'}</p>}
-                              <button 
-                                onClick={() => handleDeleteUser(u.id)}
-                                style={{
-                                  padding: '8px 16px',
-                                  background: '#d32f2f',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: 'pointer',
-                                  fontSize: '12px',
-                                }}
-                              >
-                                حذف
-                              </button>
+                              {u.departmentId && <p className={styles.cardDesc}>القسم: {dept ? dept.name : 'غير محدد'}</p>}
+                              <div className={styles.cardActions}>
+                                {u.role === 'department_manager' && (
+                                  <button 
+                                    onClick={() => router.push(`/deputy?deptId=${u.departmentId}`)}
+                                    className={styles.editBtn}
+                                  >
+                                    دخول إلى صفحة النايب
+                                  </button>
+                                )}
+                                <button 
+                                  onClick={() => handleDeleteUser(u.id)}
+                                  className={styles.deleteBtn}
+                                >
+                                  حذف
+                                </button>
+                              </div>
                             </div>
                           );
                         })}
@@ -836,80 +723,44 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                 {activeTab === 'teachers' && user.role === 'admin' && (
                   <div>
                     <h3>إدارة أعضاء هيئة التدريس</h3>
-                    <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <div className={styles.subTabs}>
                       <button 
                         onClick={() => setTeacherSubTab('add-teacher')}
-                        style={{
-                          padding: '12px 20px',
-                          background: teacherSubTab === 'add-teacher' ? '#0d47a1' : '#f0f0f0',
-                          color: teacherSubTab === 'add-teacher' ? 'white' : '#333',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          fontWeight: '500',
-                        }}
+                        className={`${styles.subTabButton} ${teacherSubTab === 'add-teacher' ? styles.active : ''}`}
                       >
-                        1. إضافة أو حذف المعلم
+                        1. إضافة أو حذف مدير القسم
                       </button>
                       <button 
                         onClick={() => setTeacherSubTab('add-subject')}
-                        style={{
-                          padding: '12px 20px',
-                          background: teacherSubTab === 'add-subject' ? '#0d47a1' : '#f0f0f0',
-                          color: teacherSubTab === 'add-subject' ? 'white' : '#333',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          fontWeight: '500',
-                        }}
+                        className={`${styles.subTabButton} ${teacherSubTab === 'add-subject' ? styles.active : ''}`}
                       >
                         إضافة مادة
                       </button>
                       <button 
                         onClick={() => setTeacherSubTab('assign-teacher')}
-                        style={{
-                          padding: '12px 20px',
-                          background: teacherSubTab === 'assign-teacher' ? '#0d47a1' : '#f0f0f0',
-                          color: teacherSubTab === 'assign-teacher' ? 'white' : '#333',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          fontWeight: '500',
-                        }}
+                        className={`${styles.subTabButton} ${teacherSubTab === 'assign-teacher' ? styles.active : ''}`}
                       >
-                        2. ربط المعلم بالمواد
+                        2. ربط مدير القسم بالمواد
                       </button>
                       <button 
                         onClick={() => setTeacherSubTab('monitor-teacher')}
-                        style={{
-                          padding: '12px 20px',
-                          background: teacherSubTab === 'monitor-teacher' ? '#0d47a1' : '#f0f0f0',
-                          color: teacherSubTab === 'monitor-teacher' ? 'white' : '#333',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          fontWeight: '500',
-                        }}
+                        className={`${styles.subTabButton} ${teacherSubTab === 'monitor-teacher' ? styles.active : ''}`}
                       >
-                        3. متابعة أداء المعلمين
+                        3. متابعة أداء مديري القسم
                       </button>
                     </div>
 
                     {teacherSubTab === 'add-teacher' && (
                       <div>
-                        <div style={{ marginBottom: '30px', padding: '20px', border: '1px solid #000', borderRadius: '8px' }}>
-                          <h4>إضافة معلم جديد</h4>
+                        <div className={styles.addForm}>
+                          <h4>إضافة مدير قسم جديد</h4>
                           <AddTeacherForm departments={departments} onAdd={handleAddUser} />
                         </div>
-                        <h4>المعلمين الحاليين</h4>
+                        <h4>مديري القسم الحاليين</h4>
                         {filteredTeachers.length === 0 ? (
-                          <p style={{ color: '#000' }}>لا يوجد معلمين</p>
+                          <p className={styles.noData}>لا يوجد مديري قسم</p>
                         ) : (
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
+                          <div className={styles.departmentsGrid}>
                             {filteredTeachers.map(t => {
                               const dept = departments.find(d => d.id === t.departmentId);
                               return (
@@ -955,9 +806,9 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
                     {teacherSubTab === 'assign-teacher' && (
                       <div>
-                        <h4>إدارة المعلمين والمواد</h4>
+                        <h4>إدارة مديري القسم والمواد</h4>
                         {teachers.length === 0 ? (
-                          <p style={{ color: '#000' }}>لا يوجد معلمين</p>
+                          <p style={{ color: '#000' }}>لا يوجد مديري قسم</p>
                         ) : (
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px' }}>
                             {teachers.map(teacher => {
@@ -1021,7 +872,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                                     </button>
                                     <button
                                       onClick={async () => {
-                                        if (teacherSubjects.length === 0) return alert('لا توجد مواد مرتبطة بهذا المعلم');
+                                        if (teacherSubjects.length === 0) return alert('لا توجد مواد مرتبطة بهذا مدير القسم');
                                         const subjOptions = teacherSubjects.map(s => `${s.id}|${s.name}`).join('\n');
                                         const sel = prompt('اختر المادة عبر السطر المبين (الصيغة id|name):\n' + subjOptions);
                                         if (!sel) return;
@@ -1069,7 +920,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                                         fontSize: '12px',
                                       }}
                                     >
-                                      حذف المعلم
+                                      حذف مدير القسم
                                     </button>
                                   </div>
                                 </div>
@@ -1082,7 +933,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
                     {teacherSubTab === 'monitor-teacher' && (
                       <div>
-                        <h4>متابعة أداء المعلمين</h4>
+                        <h4>متابعة أداء مديري القسم</h4>
                         <p>هذه الميزة قيد التطوير...</p>
                       </div>
                     )}
@@ -1167,7 +1018,13 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
           ) : (
             <>
               <div className={styles.cardHeader}>
-                <h2>لوحة المستخدم</h2>
+                <div>
+                  <h2>بوابة الدكتور</h2>
+                  <div style={{ marginTop: '10px', fontSize: '14px', color: '#0d47a1', lineHeight: '1.5', fontFamily: 'sans-serif' }}>
+                    <p style={{ margin: '5px 0', fontWeight: '500' }}>القسم: {departments.find(d => d.id === user.departmentId)?.name || 'غير محدد'}</p>
+                    <p style={{ margin: '5px 0', fontWeight: '500' }}>الاسم: {user.name || user.id}</p>
+                  </div>
+                </div>
                 <p className={styles.role}>{user.role}</p>
               </div>
               <div className={styles.content}>
@@ -1658,10 +1515,13 @@ function AddUserForm({ departments, subjects, onAdd, allowedRoles = ['user', 'te
         onChange={(e) => setRole(e.target.value)}
         style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
       >
-        {allowedRoles.includes('user') && <option value="user">مستخدم عادي</option>}
-        {allowedRoles.includes('teacher') && <option value="teacher">معلم</option>}
-        {allowedRoles.includes('department_manager') && <option value="department_manager">مسؤول قسم</option>}
         {allowedRoles.includes('admin') && <option value="admin">مسؤول النظام</option>}
+        {allowedRoles.includes('department_manager') && <option value="department_manager">دكتور</option>}
+        {allowedRoles.includes('teacher') && <option value="teacher">مدير القسم</option>}
+        {allowedRoles.includes('user') && <option value="user">مستخدم عادي</option>}
+        
+        
+        
       </select>
       {subjects ? (
         <select
@@ -1748,7 +1608,7 @@ function AddTeacherForm({ departments, onAdd }: { departments: any[], onAdd: (us
         ))}
       </select>
       <button type="submit" style={{ padding: '10px', background: '#1565c0', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-        إضافة المعلم
+        إضافة مدير القسم
       </button>
     </form>
   );
@@ -1810,7 +1670,7 @@ function AddSubjectForm({ departments = [], teachers = [], onAdd, user }: { depa
           required
           style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
         >
-          <option value="">اختر المعلم</option>
+          <option value="">اختر مدير القسم</option>
           {teachers.map((teacher) => (
             <option key={teacher.id} value={teacher.id}>{teacher.name || teacher.id}</option>
           ))}

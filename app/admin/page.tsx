@@ -3,6 +3,25 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './admin.module.css';
 
+// Reusable Item component
+function Item({ onDelete, children }: { onDelete: () => void; children: React.ReactNode }) {
+  return (
+    <div className={styles.item}>
+      <div>{children}</div>
+      <button className={styles.deleteBtn} onClick={onDelete}>حذف</button>
+    </div>
+  );
+}
+
+// Reusable filter function
+function filterBySearchTerm(items: any[], searchTerm: string, fields: string[]) {
+  return items.filter(item =>
+    fields.some(field =>
+      (item[field] || '').toLowerCase().includes(searchTerm.toLowerCase())
+    )
+  );
+}
+
 export default function AdminPanel() {
   const [user, setUser] = useState<any>(null);
   const [departments, setDepartments] = useState<any[]>([]);
@@ -73,11 +92,11 @@ export default function AdminPanel() {
     }
   };
 
-  const addUser = async (userId: string, name: string, role: string, password: string, departmentId: string | null) => {
+  const addUser = async (userId: string, name: string, role: string, password: string, departmentId: string | null, deputyAccess: boolean) => {
     const res = await fetch('/api/admin/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: userId, name, role, password, departmentId }),
+      body: JSON.stringify({ id: userId, name, role, password, departmentId, deputyAccess }),
     });
     if (res.ok) {
       const data = await res.json();
@@ -184,10 +203,7 @@ function DepartmentsTab({ departments, onAdd, onDelete, searchTerm }: any) {
     }
   };
 
-  const filteredDepartments = (departments || []).filter((dept: any) =>
-    (dept.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (dept.description || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredDepartments = filterBySearchTerm(departments || [], searchTerm, ['name', 'description']);
 
   return (
     <div className={styles.tabContent}>
@@ -213,20 +229,10 @@ function DepartmentsTab({ departments, onAdd, onDelete, searchTerm }: any) {
           <p>لا توجد أقسام</p>
         ) : (
           filteredDepartments.map((dept: any) => (
-            <div key={dept.id} className={styles.item}>
-              <div>
-                <h3>{dept.name}</h3>
-                <p>{dept.description}</p>
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button 
-                  className={styles.deleteBtn}
-                  onClick={() => onDelete(dept.id)}
-                >
-                  حذف
-                </button>
-              </div>
-            </div>
+            <Item key={dept.id} onDelete={() => onDelete(dept.id)}>
+              <h3>{dept.name}</h3>
+              <p>{dept.description}</p>
+            </Item>
           ))
         )}
       </div>
@@ -266,19 +272,11 @@ function SubjectsTab({ departments, onDelete, searchTerm }: any) {
                   <p style={{ paddingLeft: '20px', color: '#666' }}>لا توجد مواد</p>
                 ) : (
                   filteredSubjects.map((subject: any) => (
-                    <div key={subject.id} className={styles.item} style={{ marginLeft: '20px' }}>
-                      <div>
-                        <h4>{subject.name}</h4>
-                        <p>{subject.description}</p>
-                        <p style={{ fontSize: '0.9em', color: '#666' }}>{(subject.videos || []).length} فيديوهات</p>
-                      </div>
-                      <button 
-                        className={styles.deleteBtn}
-                        onClick={() => onDelete(dept.id, subject.id)}
-                      >
-                        حذف
-                      </button>
-                    </div>
+                    <Item key={subject.id} onDelete={() => onDelete(dept.id, subject.id)}>
+                      <h4>{subject.name}</h4>
+                      <p>{subject.description}</p>
+                      <p style={{ fontSize: '0.9em', color: '#666' }}>{(subject.videos || []).length} فيديوهات</p>
+                    </Item>
                   ))
                 )}
               </div>
@@ -297,23 +295,21 @@ function UsersTab({ users, onAdd, onDelete, departments, searchTerm }: any) {
   const [role, setRole] = useState('user');
   const [password, setPassword] = useState('');
   const [departmentId, setDepartmentId] = useState('');
+  const [deputyAccess, setDeputyAccess] = useState(false);
 
   const submit = () => {
     if (userId.trim() && name.trim() && password.trim()) {
-      onAdd(userId, name, role, password, departmentId || null);
+      onAdd(userId, name, role, password, departmentId || null, deputyAccess);
       setUserId('');
       setName('');
       setPassword('');
       setRole('user');
       setDepartmentId('');
+      setDeputyAccess(false);
     }
   };
 
-  const filteredUsers = (users || []).filter((u: any) =>
-    (u.id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (u.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (u.role || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredUsers = filterBySearchTerm(users || [], searchTerm, ['id', 'name', 'role']);
 
   return (
     <div className={styles.tabContent}>
@@ -337,7 +333,7 @@ function UsersTab({ users, onAdd, onDelete, departments, searchTerm }: any) {
         />
         <select value={role} onChange={e => setRole(e.target.value)}>
           <option value="user">مستخدم عادي</option>
-          <option value="department_manager">مسؤول قسم</option>
+          <option value="department_manager">مدير القسم</option>
           <option value="admin">مسؤول النظام</option>
         </select>
         <select value={departmentId} onChange={e => setDepartmentId(e.target.value)}>
@@ -346,6 +342,10 @@ function UsersTab({ users, onAdd, onDelete, departments, searchTerm }: any) {
             <option key={dept.id} value={dept.id}>{dept.name}</option>
           ))}
         </select>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+          <input type="checkbox" checked={deputyAccess} onChange={e => setDeputyAccess(e.target.checked)} />
+          <span>منح صلاحية نائب المدير</span>
+        </label>
         <button onClick={submit}>إضافة</button>
       </div>
 
@@ -357,19 +357,11 @@ function UsersTab({ users, onAdd, onDelete, departments, searchTerm }: any) {
           filteredUsers.map((u: any) => {
             const dept = (departments || []).find((d: any) => d.id === u.departmentId);
             return (
-              <div key={u.id} className={styles.item}>
-                <div>
-                  <h3>{u.name || u.id}</h3>
-                  <p>المستخدم: {u.id} | الدور: {u.role === 'admin' ? 'مسؤول النظام' : u.role === 'department_manager' ? 'مسؤول قسم' : 'مستخدم عادي'}</p>
-                  {u.departmentId && <p>القسم: {dept ? dept.name : 'غير محدد'}</p>}
-                </div>
-                <button 
-                  className={styles.deleteBtn}
-                  onClick={() => onDelete(u.id)}
-                >
-                  حذف
-                </button>
-              </div>
+              <Item key={u.id} onDelete={() => onDelete(u.id)}>
+                <h3>{u.name || u.id} {u.deputyAccess ? <span style={{ fontSize: '0.9em', color: '#0a74ff', marginLeft: 8 }}>(نائب)</span> : null}</h3>
+                <p>المستخدم: {u.id} | الدور: {u.role === 'admin' ? 'مسؤول النظام' : (u.role === 'department_manager' || u.role === 'teacher') ? 'مدير القسم' : 'مستخدم عادي'}</p>
+                {u.departmentId && <p>القسم: {dept ? dept.name : 'غير محدد'}</p>}
+              </Item>
             );
           })
         )}

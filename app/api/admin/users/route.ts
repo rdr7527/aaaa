@@ -42,6 +42,7 @@ export async function GET(req: Request) {
     name: u.name,
     role: u.role,
     departmentId: u.departmentId || null,
+    deputyAccess: !!u.deputyAccess,
   }));
   return NextResponse.json({ ok: true, users: safe });
 }
@@ -83,12 +84,13 @@ export async function POST(req: Request) {
     role: body.role || 'user',
     departmentId: body.departmentId || null,
     password: hashPassword(body.password || 'password123'),
+    deputyAccess: userInfo?.role === 'admin' ? !!body.deputyAccess : false,
   };
   if (!data.users) data.users = [];
   data.users.push(user);
   writeUsersFile(data);
   
-  return NextResponse.json({ ok: true, user: { id: user.id, name: user.name, role: user.role, departmentId: user.departmentId } });
+  return NextResponse.json({ ok: true, user: { id: user.id, name: user.name, role: user.role, departmentId: user.departmentId, deputyAccess: !!user.deputyAccess } });
 }
 
 export async function PUT(req: Request) {
@@ -101,9 +103,14 @@ export async function PUT(req: Request) {
   if (body.role) user.role = body.role;
   if (body.departmentId !== undefined) user.departmentId = body.departmentId;
   if (body.password) user.password = hashPassword(body.password);
+  // Only admins can set deputyAccess
+  const requesterRole = getUserRole(req);
+  if (body.deputyAccess !== undefined && requesterRole === 'admin') {
+    user.deputyAccess = !!body.deputyAccess;
+  }
   
   writeUsersFile(data);
-  return NextResponse.json({ ok: true, user: { id: user.id, name: user.name, role: user.role, departmentId: user.departmentId } });
+  return NextResponse.json({ ok: true, user: { id: user.id, name: user.name, role: user.role, departmentId: user.departmentId, deputyAccess: !!user.deputyAccess } });
 }
 
 export async function DELETE(req: Request) {
