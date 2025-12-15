@@ -88,7 +88,12 @@ export async function POST(req: Request) {
   };
   if (!data.users) data.users = [];
   data.users.push(user);
-  writeUsersFile(data);
+  try {
+    writeUsersFile(data);
+  } catch (err) {
+    console.error('Failed to save new user:', err);
+    return NextResponse.json({ ok: false, error: 'Failed to save user' }, { status: 500 });
+  }
   
   return NextResponse.json({ ok: true, user: { id: user.id, name: user.name, role: user.role, departmentId: user.departmentId, deputyAccess: !!user.deputyAccess } });
 }
@@ -109,7 +114,12 @@ export async function PUT(req: Request) {
     user.deputyAccess = !!body.deputyAccess;
   }
   
-  writeUsersFile(data);
+  try {
+    writeUsersFile(data);
+  } catch (err) {
+    console.error('Failed to update users file (PUT):', err);
+    return NextResponse.json({ ok: false, error: 'Failed to update user' }, { status: 500 });
+  }
   return NextResponse.json({ ok: true, user: { id: user.id, name: user.name, role: user.role, departmentId: user.departmentId, deputyAccess: !!user.deputyAccess } });
 }
 
@@ -138,6 +148,11 @@ export async function DELETE(req: Request) {
   }
   
   data.users = (data.users || []).filter((u: any) => u.id !== userId);
-  writeUsersFile(data);
+  try {
+    writeUsersFile(data);
+  } catch (err) {
+    console.error('Failed to delete user:', err);
+    return NextResponse.json({ ok: false, error: 'Failed to delete user' }, { status: 500 });
+  }
   return NextResponse.json({ ok: true });
 }

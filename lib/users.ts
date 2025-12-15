@@ -1,9 +1,11 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { encryptJson, decryptJson } from './crypto';
 import { pbkdf2Sync, randomBytes } from 'crypto';
 
-const DATA_FILE = path.join(process.cwd(), 'data', 'users.enc.json');
+const DEFAULT_DATA_FILE = path.join(process.cwd(), 'data', 'users.enc.json');
+const DATA_FILE = process.env.DATA_FILE_PATH || (process.env.VERCEL ? path.join(os.tmpdir(), 'users.enc.json') : DEFAULT_DATA_FILE);
 
 function hashPassword(password: string, salt?: string) {
   const _salt = salt || randomBytes(8).toString('hex');
@@ -30,8 +32,13 @@ export function readUsersFile() {
 export function writeUsersFile(obj: any) {
   const payload = encryptJson(obj);
   const dir = path.dirname(DATA_FILE);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(DATA_FILE, payload, 'utf8');
+  try {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(DATA_FILE, payload, 'utf8');
+  } catch (err) {
+    console.error('Failed to write users file:', err, 'DATA_FILE=', DATA_FILE);
+    throw err;
+  }
 }
 
 export function seedAdminIfEmpty() {
