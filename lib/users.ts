@@ -34,6 +34,19 @@ export function writeUsersFile(obj: any) {
   const dir = path.dirname(DATA_FILE);
   try {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    // If an existing file is present, ensure we can decrypt it before overwriting.
+    if (fs.existsSync(DATA_FILE)) {
+      try {
+        const existing = fs.readFileSync(DATA_FILE, 'utf8');
+        // attempt to decrypt to verify integrity / key
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { decryptJson } = require('./crypto');
+        decryptJson(existing);
+      } catch (err) {
+        console.error('Existing users file cannot be decrypted. Refusing to overwrite to avoid data loss.', err, 'DATA_FILE=', DATA_FILE);
+        throw new Error('Existing users file cannot be decrypted. Set correct USER_DATA_KEY or remove the file before proceeding.');
+      }
+    }
     fs.writeFileSync(DATA_FILE, payload, 'utf8');
   } catch (err) {
     console.error('Failed to write users file:', err, 'DATA_FILE=', DATA_FILE);
