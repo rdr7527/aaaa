@@ -1380,7 +1380,7 @@ function AddAssignmentForm({ onAdd }: { onAdd: (title: string, question: string,
   );
 }
 
-function ChoiceAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => void }) {
+function ChoiceAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => Promise<boolean> }) {
   const [selected, setSelected] = useState('');
   return (
     <div>
@@ -1398,7 +1398,7 @@ function ChoiceAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => 
   );
 }
 
-function TFAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => void }) {
+function TFAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => Promise<boolean> }) {
   const [val, setVal] = useState('true');
   return (
     <div>
@@ -1413,7 +1413,7 @@ function TFAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => void
   );
 }
 
-function EssayAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => void }) {
+function EssayAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => Promise<boolean> }) {
   const [text, setText] = useState('');
   return (
     <div>

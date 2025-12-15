@@ -14,10 +14,13 @@ function getYoutubeEmbedUrl(url: string): string | null {
 }
 
 // Helper to submit completion (fetches current user then posts completion)
-async function handleCompleteAssignment(assignmentId: string, answer: any) {
+async function handleCompleteAssignment(assignmentId: string, answer: any): Promise<boolean> {
   try {
     const meRes = await fetch('/api/me', { credentials: 'include' });
-    if (!meRes.ok) return alert('يرجى تسجيل الدخول');
+    if (!meRes.ok) {
+      alert('يرجى تسجيل الدخول');
+      return false;
+    }
     const meBody = await meRes.json();
     const user = meBody.user;
     const res = await fetch(`/api/assignments/complete`, {
@@ -341,7 +344,7 @@ function AddAssignmentForm({ onAdd }: { onAdd: (title: string, description: stri
   );
 }
 
-function ChoiceAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => void }) {
+function ChoiceAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => Promise<boolean> }) {
   const [selected, setSelected] = useState('');
   const [loading, setLoading] = useState(false);
   return (
@@ -360,7 +363,7 @@ function ChoiceAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => 
   );
 }
 
-function TFAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => void }) {
+function TFAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => Promise<boolean> }) {
   const [val, setVal] = useState('true');
   const [loading, setLoading] = useState(false);
   return (
@@ -376,7 +379,7 @@ function TFAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => void
   );
 }
 
-function EssayAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => void }) {
+function EssayAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => Promise<boolean> }) {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   return (
