@@ -25,6 +25,8 @@ export default function Dashboard() {
   const [teacherSubTab, setTeacherSubTab] = useState('add-teacher');
   const [userFilter, setUserFilter] = useState('all');
   const [teacherFilter, setTeacherFilter] = useState('all');
+  const [modalUserSearchTerm, setModalUserSearchTerm] = useState('');
+  const [modalUserFilter, setModalUserFilter] = useState('all');
   const router = useRouter();
 
 const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
@@ -470,9 +472,9 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
   const [selectedVideo, setSelectedVideo] = useState<{ video: any; subjectId?: string } | null>(null);
 
-  const [addModalType, setAddModalType] = useState<'subject' | 'video' | 'assignment' | 'student' | null>(null);
+  const [addModalType, setAddModalType] = useState<'subject' | 'video' | 'assignment' | 'student' | 'department' | 'teacher' | null>(null);
 
-  const [viewModalType, setViewModalType] = useState<'subjects' | 'videos' | 'assignments' | 'students' | null>(null);
+  const [viewModalType, setViewModalType] = useState<'subjects' | 'videos' | 'assignments' | 'students' | 'departments' | 'teachers' | 'users' | null>(null);
 
   function getYoutubeEmbedUrl(url: string): string | null {
     try {
@@ -566,88 +568,71 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                   />
                 </div>
 
-                <div className={styles.tabs}>
-                  <button 
-                    onClick={() => setActiveTab('departments')}
-                    className={`${styles.tabButton} ${activeTab === 'departments' ? styles.active : ''}`}
-                  >
-                    إدارة الأقسام ({filteredDepartments.length})
-                  </button>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '18px', marginTop: '22px', direction: 'ltr' }}>
+                  <div onClick={() => setActiveTab('departments')} style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', cursor: 'pointer' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px' }}>
+                      <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px' }}>إدارة الأقسام</h4>
+                      <img src="../src/svg/book.svg" alt="" style={{ width: '28px', height: '28px' }} />
+
+                    </div>
+                    <div style={{ marginTop: '12px' }}>
+                      <p onClick={(e) => {e.stopPropagation(); setAddModalType('department')}} style={{ cursor: 'pointer', textAlign: 'center' }}>إضافة قسم جديد</p>
+                      <p onClick={(e) => {e.stopPropagation(); setViewModalType('departments')}} style={{ cursor: 'pointer', textAlign: 'center' }}>عرض الأقسام ({filteredDepartments.length})</p>
+                    </div>
+                  </div>
                   {user.role === 'admin' && (
-                    <button 
-                      onClick={() => setActiveTab('users')}
-                      className={`${styles.tabButton} ${activeTab === 'users' ? styles.active : ''}`}
-                    >
-                      إدارة المستخدمين ({filteredUsers.length})
-                    </button>
+                    <div style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', cursor: 'pointer' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px' }}>
+                        <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px' }}>إدارة المستخدمين</h4>
+                        <img src="../src/svg/student.svg" alt="" style={{ width: '28px', height: '28px' }} />
+                      </div>
+                      <div style={{ marginTop: '12px' }}>
+                        <p onClick={(e) => {e.stopPropagation(); setAddModalType('student')}} style={{ cursor: 'pointer', textAlign: 'center' }}>إضافة مستخدم جديد</p>
+                        <p onClick={(e) => {e.stopPropagation(); setViewModalType('users')}} style={{ cursor: 'pointer', textAlign: 'center' }}>عرض مستخدمين ({filteredUsers.length})</p>
+                      </div>
+                    </div>
                   )}
                   {user.role === 'admin' && (
-                    <button 
-                      onClick={() => setActiveTab('teachers')}
-                      className={`${styles.tabButton} ${activeTab === 'teachers' ? styles.active : ''}`}
-                    >
-                      أعضاء هيئة التدريس ({teachers.length})
-                    </button>
+                    <div onClick={() => setActiveTab('teachers')} style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', cursor: 'pointer' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px' }}>
+                        <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px' }}>أعضاء هيئة التدريس</h4>
+                        <img src="../src/svg/assignment.svg" alt="" style={{ width: '28px', height: '28px' }} />
+
+                      </div>
+                      <div style={{ marginTop: '12px' }}>
+                        <p onClick={(e) => {e.stopPropagation(); setAddModalType('teacher')}} style={{ cursor: 'pointer', textAlign: 'right' }}>إضافة مدير قسم جديد</p>
+                        <p onClick={(e) => {e.stopPropagation(); setViewModalType('teachers')}} style={{ cursor: 'pointer', textAlign: 'right' }}>عرض مديري القسم ({filteredTeachers.length})</p>
+                      </div>
+                    </div>
                   )}
                   {((user.role === 'department_manager') || (user.role === 'teacher')) && (
-                    <>
-                      <button 
-                        onClick={() => setActiveTab('subjects')}
-                        className={`${styles.tabButton} ${activeTab === 'subjects' ? styles.active : ''}`}
-                      >
-                        إدارة المواد ({filteredSubjects.length})
-                      </button>
-                      {user.role === 'department_manager' && (
-                      <button 
-                        onClick={() => setActiveTab('videos')}
-                        className={`${styles.tabButton} ${activeTab === 'videos' ? styles.active : ''}`}
-                      >
-                        إدارة الفيديوهات ({filteredVideos.length})
-                      </button>
-                      )}
-                    </>
+                    <div onClick={() => setActiveTab('subjects')} style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', cursor: 'pointer' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px' }}>
+                        <img src="../src/svg/book.svg" alt="" style={{ width: '28px', height: '28px' }} />
+                        <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px' }}>إدارة المواد</h4>
+                      </div>
+                      <div style={{ marginTop: '12px' }}>
+                        <p onClick={(e) => {e.stopPropagation(); setAddModalType('subject')}} style={{ cursor: 'pointer', textAlign: 'center' }}>إضافة مادة</p>
+                        <p onClick={(e) => {e.stopPropagation(); setViewModalType('subjects')}} style={{ cursor: 'pointer', textAlign: 'center' }}>عرض المواد ({filteredSubjects.length})</p>
+                      </div>
+                    </div>
                   )}
+                  {user.role === 'department_manager' && (
+                    <div onClick={() => setActiveTab('videos')} style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', cursor: 'pointer' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px' }}>
+                        <img src="../src/svg/video.svg" alt="" style={{ width: '28px', height: '28px' }} />
+                        <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px' }}>إدارة الفيديوهات</h4>
+                      </div>
+                      <div style={{ marginTop: '12px' }}>
+                        <p onClick={(e) => {e.stopPropagation(); setAddModalType('video')}} style={{ cursor: 'pointer', textAlign: 'center' }}>إضافة درس</p>
+                        <p onClick={(e) => {e.stopPropagation(); setViewModalType('videos')}} style={{ cursor: 'pointer', textAlign: 'center' }}>عرض الدروس ({filteredVideos.length})</p>
+                      </div>
+                    </div>
+                  )}
+
                 </div>
 
-                {activeTab === 'departments' && (
-                  <div>
-                    {user.role === 'admin' && (
-                      <div className={styles.addForm}>
-                        <h4>إضافة قسم جديد</h4>
-                        <AddDepartmentForm onAdd={handleAddDept} />
-                      </div>
-                    )}
-                    <h3>الأقسام الدراسية</h3>
-                    {filteredDepartments.length === 0 ? (
-                      <p className={styles.noData}>لا توجد أقسام</p>
-                    ) : (
-                      <div className={styles.departmentsGrid}>
-                        {filteredDepartments.map(dept => (
-                          <div key={dept.id} className={styles.departmentCard}>
-                            <h4 className={styles.cardTitle}>{dept.name}</h4>
-                            <p className={styles.cardDesc}>{dept.description}</p>
-                            <div className={styles.cardActions}>
-                              <button 
-                                onClick={() => handleEditDept(dept.id)}
-                                className={styles.editBtn}
-                              >
-                                تعديل
-                              </button>
-                              {user.role === 'admin' && (
-                                <button 
-                                  onClick={() => handleDeleteDept(dept.id)}
-                                  className={styles.deleteBtn}
-                                >
-                                  حذف
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+                {/* لوحة عرض الأقسام أزيلت حسب الطلب (لا تظهر هنا). */}
 
                 {activeTab === 'users' && user.role === 'admin' && (
                   <div>
@@ -1035,8 +1020,8 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                       {/* المواد */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                        
-                        <div style={{ border: '1px solid #000', padding: '10px', borderRadius: '6px', textAlign: 'right' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                        <div style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', textAlign: 'right' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', marginBottom: '8px' }}>
                             <img src="../src/svg/book.svg" alt="كتاب" style={{ width: '28px', height: '28px' }} />
                             <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px', fontFamily: 'sans-serif' }}>المواد</h4>
                           </div>
@@ -1047,8 +1032,8 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
                       {/* الدروس */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <div style={{ border: '1px solid #000', padding: '10px', borderRadius: '6px', textAlign: 'right' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                        <div style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', textAlign: 'right' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', marginBottom: '8px' }}>
                             <img src="../src/svg/video.svg" alt="فيديو" style={{ width: '28px', height: '28px' }} />
                             <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px', fontFamily: 'sans-serif' }}>الدروس</h4>
                           </div>
@@ -1059,8 +1044,8 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
                       {/* الواجبات */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <div style={{ border: '1px solid #000', padding: '10px', borderRadius: '6px', textAlign: 'right' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                        <div style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', textAlign: 'right' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', marginBottom: '8px' }}>
                             <img src="../src/svg/assignment.svg" alt="واجب" style={{ width: '28px', height: '28px' }} />
                             <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px', fontFamily: 'sans-serif' }}>الواجبات</h4>
                           </div>
@@ -1071,13 +1056,13 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
                       {/* إضافة الطلاب */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <div style={{ border: '1px solid #000', padding: '10px', borderRadius: '6px', textAlign: 'right' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                        <div style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', textAlign: 'right' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', marginBottom: '8px' }}>
                             <img src="../src/svg/student.svg" alt="طالب" style={{ width: '28px', height: '28px' }} />
                             <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px', fontFamily: 'sans-serif' }}>إضافة الطلاب</h4>
                           </div>
                           <p style={{ fontSize: '15px', margin: 0, cursor: 'pointer', fontFamily: 'sans-serif' }} onClick={() => setAddModalType('student')}>إضافة طالب</p>
-                          <button style={{ fontSize: '15px', margin: 0, cursor: 'pointer', fontFamily: 'sans-serif', background: 'none', border: 'none', color: 'inherit', textAlign: 'right' }} onClick={() => setViewModalType('students')}>عرض الطلاب ({filteredStudents.length})</button>
+                          <p style={{ fontSize: '15px', margin: 0, cursor: 'pointer', fontFamily: 'sans-serif', textAlign: 'right' }} onClick={() => setViewModalType('students')}>عرض الطلاب ({filteredStudents.length})</p>
                         </div>
                       </div>
                     </div>
@@ -1131,7 +1116,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
           <div style={{ background: 'white', padding: '20px', maxWidth: '600px', width: '90%', borderRadius: 8, position: 'relative', direction: 'rtl' }}>
             <button onClick={() => setAddModalType(null)} style={{ position: 'absolute', left: 8, top: 8, fontSize: 20, border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
             <h2 style={{ marginTop: 0, marginBottom: 16 }}>
-              {addModalType === 'subject' ? 'إضافة مادة جديدة' : addModalType === 'video' ? 'إضافة درس جديد' : addModalType === 'assignment' ? 'إضافة واجب جديد' : 'إضافة طالب جديد'}
+              {addModalType === 'subject' ? 'إضافة مادة جديدة' : addModalType === 'video' ? 'إضافة درس جديد' : addModalType === 'assignment' ? 'إضافة واجب جديد' : addModalType === 'department' ? 'إضافة قسم جديد' : 'إضافة طالب جديد'}
             </h2>
             {addModalType === 'subject' && (
               <AddSubjectForm departments={departments} teachers={[]} onAdd={(name, desc, deptId, teacherId) => { handleAddSubject(name, desc, user.departmentId || deptId, teacherId); setAddModalType(null); }} user={user} />
@@ -1141,6 +1126,9 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             )}
             {addModalType === 'assignment' && (
               <AddAssignmentForm onAdd={(title, question, answerType, options, correctAnswer, dueDate) => { handleAddAssignment(title, question, answerType, options, correctAnswer, dueDate); setAddModalType(null); }} />
+            )}
+            {addModalType === 'department' && (
+              <AddDepartmentForm onAdd={(name, description) => { handleAddDept(name, description); setAddModalType(null); }} />
             )}
             {addModalType === 'student' && (
               <AddUserForm departments={departments} onAdd={(userId, name, role, password, departmentId) => { handleAddUser(userId, name, 'user', password, departmentId || user.departmentId); setAddModalType(null); }} allowedRoles={['user']} />
@@ -1154,7 +1142,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
           <div style={{ background: 'white', padding: '20px', maxWidth: '800px', width: '90%', maxHeight: '80vh', overflow: 'auto', borderRadius: 8, position: 'relative', direction: 'rtl' }}>
             <button onClick={() => setViewModalType(null)} style={{ position: 'absolute', left: 8, top: 8, fontSize: 20, border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
             <h2 style={{ marginTop: 0, marginBottom: 16 }}>
-              {viewModalType === 'subjects' ? 'المواد الدراسية' : viewModalType === 'videos' ? 'الدروس التعليمية' : viewModalType === 'assignments' ? 'الواجبات' : 'الطلاب'}
+              {viewModalType === 'subjects' ? 'المواد الدراسية' : viewModalType === 'videos' ? 'الدروس التعليمية' : viewModalType === 'assignments' ? 'الواجبات' : viewModalType === 'departments' ? 'الأقسام الدراسية' : viewModalType === 'teachers' ? 'مديري القسم' : viewModalType === 'users' ? 'المستخدمين' : 'الطلاب'}
             </h2>
             {viewModalType === 'subjects' && (
               <div>
@@ -1272,6 +1260,171 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                         </div>
                       );
                     })}
+                  </div>
+                )}
+              </div>
+            )}
+            {viewModalType === 'users' && (
+              <div>
+                <div style={{ marginBottom: '20px' }}>
+                  <input
+                    type="text"
+                    placeholder="ابحث عن مستخدم..."
+                    value={modalUserSearchTerm}
+                    onChange={(e) => setModalUserSearchTerm(e.target.value)}
+                    style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px', width: '100%', maxWidth: '300px', marginBottom: '10px' }}
+                  />
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <button 
+                      onClick={() => setModalUserFilter('all')}
+                      style={{
+                        padding: '6px 12px',
+                        background: modalUserFilter === 'all' ? '#1976d2' : '#e0e0e0',
+                        color: modalUserFilter === 'all' ? 'white' : 'black',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      الكل
+                    </button>
+                    <button 
+                      onClick={() => setModalUserFilter('user')}
+                      style={{
+                        padding: '6px 12px',
+                        background: modalUserFilter === 'user' ? '#1976d2' : '#e0e0e0',
+                        color: modalUserFilter === 'user' ? 'white' : 'black',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      الطلاب
+                    </button>
+                    <button 
+                      onClick={() => setModalUserFilter('department_manager')}
+                      style={{
+                        padding: '6px 12px',
+                        background: modalUserFilter === 'department_manager' ? '#1976d2' : '#e0e0e0',
+                        color: modalUserFilter === 'department_manager' ? 'white' : 'black',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      دكتور
+                    </button>
+                    <button 
+                      onClick={() => setModalUserFilter('teacher')}
+                      style={{
+                        padding: '6px 12px',
+                        background: modalUserFilter === 'teacher' ? '#1976d2' : '#e0e0e0',
+                        color: modalUserFilter === 'teacher' ? 'white' : 'black',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      مدير القسم
+                    </button>
+                    <button 
+                      onClick={() => setModalUserFilter('admin')}
+                      style={{
+                        padding: '6px 12px',
+                        background: modalUserFilter === 'admin' ? '#1976d2' : '#e0e0e0',
+                        color: modalUserFilter === 'admin' ? 'white' : 'black',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      مدير النظام
+                    </button>
+                  </div>
+                </div>
+                {(() => {
+                  const modalFilteredUsers = users.filter(u => 
+                    (u.id || '').includes(modalUserSearchTerm) || 
+                    (u.name || '').includes(modalUserSearchTerm) || 
+                    (u.role || '').includes(modalUserSearchTerm)
+                  ).filter(u => modalUserFilter === 'all' || u.role === modalUserFilter);
+                  return modalFilteredUsers.length === 0 ? (
+                    <p>لا يوجد مستخدمين</p>
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+                      {modalFilteredUsers.map(u => {
+                        const dept = departments.find(d => d.id === u.departmentId);
+                        return (
+                          <div key={u.id} style={{
+                            border: '1px solid #000',
+                            padding: '10px',
+                            borderRadius: '8px',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                          }}>
+                            <h5 style={{ margin: '0 0 8px 0' }}>{u.name || u.id}</h5>
+                            <p style={{ color: '#666', fontSize: '12px', margin: '0 0 5px 0' }}>المستخدم: {u.id}</p>
+                            <p style={{ color: '#666', fontSize: '12px', margin: '0 0 5px 0' }}>
+                              الدور: {u.role === 'admin' ? 'مدير النظام' : u.role === 'department_manager' ? 'دكتور' : u.role === 'teacher' ? 'مدير القسم' : 'طالب'}
+                            </p>
+                            {u.departmentId && <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>القسم: {dept ? dept.name : 'غير محدد'}</p>}
+                            <button onClick={() => handleDeleteUser(u.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+            {viewModalType === 'teachers' && (
+              <div>
+                {filteredTeachers.length === 0 ? (
+                  <p>لا يوجد مديري قسم</p>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+                    {filteredTeachers.map(t => {
+                      const dept = departments.find(d => d.id === t.departmentId);
+                      return (
+                        <div key={t.id} style={{
+                          border: '1px solid #000',
+                          padding: '10px',
+                          borderRadius: '8px',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                        }}>
+                          <h5 style={{ margin: '0 0 8px 0' }}>{t.name || t.id}</h5>
+                          <p style={{ color: '#666', fontSize: '12px', margin: '0 0 5px 0' }}>المستخدم: {t.id}</p>
+                          {t.departmentId && <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>القسم: {dept ? dept.name : 'غير محدد'}</p>}
+                          <button onClick={() => handleDeleteUser(t.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+            {viewModalType === 'departments' && (
+              <div>
+                {filteredDepartments.length === 0 ? (
+                  <p>لا توجد أقسام</p>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+                    {filteredDepartments.map(dept => (
+                      <div key={dept.id} style={{
+                        border: '1px solid #000',
+                        padding: '10px',
+                        borderRadius: '8px',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                      }}>
+                        <h5 style={{ margin: '0 0 8px 0' }}>{dept.name}</h5>
+                        <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>{dept.description}</p>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button onClick={() => handleEditDept(dept.id)} style={{ padding: '4px 8px', fontSize: '12px' }}>تعديل</button>
+                          {user.role === 'admin' && (
+                            <button onClick={() => handleDeleteDept(dept.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
