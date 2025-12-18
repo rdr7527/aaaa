@@ -159,7 +159,7 @@ export default function DeputyPanel() {
     <div className={styles.container}>
       <header className={styles.navbar} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <img src="../src/sh.jpg" alt="الشعار" style={{ width: '48px', height: '48px', objectFit: 'contain' }} />
+          <img src="../src/sh.png" alt="الشعار" style={{ width: '48px', height: '48px', objectFit: 'contain' }} />
           <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
             <span style={{ fontSize: '16px', fontWeight: 700 }}>منارة المعرفة</span>
             <small style={{ fontSize: '12px', color: '#ffffffcc' }}>صلاحيات نائب المدير - إدارة القسم</small>
@@ -200,7 +200,7 @@ export default function DeputyPanel() {
               <input placeholder="الاسم الكامل" value={name} onChange={e => setName(e.target.value)} />
               <input placeholder="كلمة المرور" type="password" value={password} onChange={e => setPassword(e.target.value)} />
               <select value={role} onChange={e => setRole(e.target.value)}>
-                <option value="user">مستخدم عادي</option>
+                <option value="user">طالب</option>
               </select>
               <button onClick={addUser}>إضافة</button>
             </div>

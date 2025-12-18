@@ -27,6 +27,8 @@ export default function Dashboard() {
   const [teacherFilter, setTeacherFilter] = useState('all');
   const [modalUserSearchTerm, setModalUserSearchTerm] = useState('');
   const [modalUserFilter, setModalUserFilter] = useState('all');
+  const [modalDeptSearchTerm, setModalDeptSearchTerm] = useState('');
+  const deptListRef = React.useRef<HTMLDivElement | null>(null);
   const router = useRouter();
 
 const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
@@ -259,8 +261,20 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   };
 
   // Admin CRUD actions for users
-  const handleAddUser = async (userId: string, name: string, role: string, password: string, departmentId?: string) => {
-    if (user?.role !== 'admin' && !(user?.role === 'department_manager' && role === 'user')) return;
+  const handleAddUser = async (userId: string, name: string, role: string, password: string, departmentId?: string): Promise<boolean> => {
+    if (user?.role !== 'admin' && !(user?.role === 'department_manager' && role === 'user')) {
+      showToast('لا تملك صلاحية إضافة مستخدم', 'error');
+      return false;
+    }
+    const idTrim = (userId || '').trim();
+    if (!idTrim) {
+      showToast('أدخل معرف مستخدم صالح', 'error');
+      return false;
+    }
+    if (users.some(u => (u.id || '').toString() === idTrim)) {
+      showToast('هذا المستخدم موجود بالفعل', 'error');
+      return false;
+    }
     try {
       const res = await fetch('/api/admin/users', {
         method: 'POST',
@@ -269,13 +283,21 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       });
       if (res.ok) {
         if (user?.role === 'admin') {
-          loadData();
+          await loadData();
         } else if (user?.role === 'department_manager') {
-          loadDepartmentData(user.departmentId);
+          await loadDepartmentData(user.departmentId);
         }
+        showToast('تمت إضافة المستخدم بنجاح', 'success');
+        return true;
+      } else {
+        const text = await res.text().catch(() => '');
+        showToast(text ? `فشل إضافة المستخدم: ${text}` : 'فشل إضافة المستخدم', 'error');
+        return false;
       }
     } catch (e) {
       console.error(e);
+      showToast('حدث خطأ أثناء إضافة المستخدم', 'error');
+      return false;
     }
   };
 
@@ -472,9 +494,99 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
   const [selectedVideo, setSelectedVideo] = useState<{ video: any; subjectId?: string } | null>(null);
 
+  const [toast, setToast] = useState<{ message: string; type?: 'success' | 'error' | 'info' } | null>(null);
+
+  const [showNotifModal, setShowNotifModal] = useState(false);
+  const [notifTarget, setNotifTarget] = useState<'all' | 'departments' | 'doctor' | 'students'>('all');
+  const [notifMessage, setNotifMessage] = useState('');
+  const [notifView, setNotifView] = useState<'send'|'messages'|'notifications'>('send');
+  const [notifMode, setNotifMode] = useState<'message'|'notification'>('message');
+  const [notifRecipient, setNotifRecipient] = useState<string>('');
+  const [sentMessages, setSentMessages] = useState<any[]>([]);
+  const [sentNotifications, setSentNotifications] = useState<any[]>([]);
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
+  const [showDeptSubjectsModal, setShowDeptSubjectsModal] = useState(false);
+  const [showAddSubjectModal, setShowAddSubjectModal] = useState(false);
+
+  const refreshNotifCounts = () => {
+    try {
+      const rawMsgs = typeof window !== 'undefined' ? localStorage.getItem('app_messages') || '[]' : '[]';
+      const rawNot = typeof window !== 'undefined' ? localStorage.getItem('app_notifications') || '[]' : '[]';
+      const msgs = JSON.parse(rawMsgs) || [];
+      const nots = JSON.parse(rawNot) || [];
+      const readKey = `app_messages_read_${user?.id || ''}`;
+      const rawRead = typeof window !== 'undefined' ? localStorage.getItem(readKey) || '[]' : '[]';
+      const readIds = JSON.parse(rawRead) || [];
+      const unreadMsgs = Array.isArray(msgs) ? msgs.filter((m: any) => !readIds.includes(m.id)).length : 0;
+      const unreadNots = Array.isArray(nots) ? nots.filter((n: any) => n.to === (user?.id || '') && !n.read).length : 0;
+      setUnreadMessagesCount(unreadMsgs);
+      setUnreadNotificationsCount(unreadNots);
+    } catch (e) {
+      setUnreadMessagesCount(0);
+      setUnreadNotificationsCount(0);
+    }
+  };
+
+  const openNotifModal = (opts?: { openTab?: 'send' | 'messages' | 'notifications'; onlyForCurrentUser?: boolean }) => {
+    try {
+      const rawMsgs = typeof window !== 'undefined' ? localStorage.getItem('app_messages') || '[]' : '[]';
+      const rawNot = typeof window !== 'undefined' ? localStorage.getItem('app_notifications') || '[]' : '[]';
+      const msgs = JSON.parse(rawMsgs);
+      const nots = JSON.parse(rawNot);
+      // If opening messages from dashboard, show unread messages only for current user
+      try {
+        const readKey = `app_messages_read_${user?.id || ''}`;
+        const rawRead = typeof window !== 'undefined' ? localStorage.getItem(readKey) || '[]' : '[]';
+        const readIds = JSON.parse(rawRead) || [];
+        if (opts?.openTab === 'messages') {
+          setSentMessages(Array.isArray(msgs) ? msgs.filter((m: any) => !readIds.includes(m.id)) : []);
+          // mark them as read for this user
+          const idsToMark = Array.isArray(msgs) ? msgs.filter((m: any) => !readIds.includes(m.id)).map((m: any) => m.id) : [];
+          const newRead = Array.isArray(readIds) ? Array.from(new Set([...readIds, ...idsToMark])) : idsToMark;
+          if (typeof window !== 'undefined') localStorage.setItem(readKey, JSON.stringify(newRead));
+        } else {
+          setSentMessages(Array.isArray(msgs) ? msgs : []);
+        }
+      } catch (e) {
+        setSentMessages(Array.isArray(msgs) ? msgs : []);
+      }
+
+      if (opts?.openTab === 'notifications' && opts?.onlyForCurrentUser) {
+        const filtered = Array.isArray(nots) ? nots.filter((n: any) => n.to === (user?.id || '')) : [];
+        // mark those notifications as read
+        try {
+          const allNots = Array.isArray(nots) ? nots : [];
+          allNots.forEach((n: any) => { if (n.to === (user?.id || '')) n.read = true; });
+          if (typeof window !== 'undefined') localStorage.setItem('app_notifications', JSON.stringify(allNots));
+        } catch (e) {}
+        setSentNotifications(filtered);
+      } else {
+        setSentNotifications(Array.isArray(nots) ? nots : []);
+      }
+    } catch (e) {
+      setSentMessages([]);
+      setSentNotifications([]);
+    }
+    setNotifView(opts?.openTab || 'messages');
+    setNotifMode('message');
+    setNotifRecipient('');
+    setShowNotifModal(true);
+    // update counts after possible marking
+    setTimeout(() => refreshNotifCounts(), 50);
+  };
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+  useEffect(() => {
+    // refresh counts on mount and when user changes
+    refreshNotifCounts();
+  }, [user?.id]);
   const [addModalType, setAddModalType] = useState<'subject' | 'video' | 'assignment' | 'student' | 'department' | 'teacher' | null>(null);
 
-  const [viewModalType, setViewModalType] = useState<'subjects' | 'videos' | 'assignments' | 'students' | 'departments' | 'teachers' | 'users' | null>(null);
+  const [viewModalType, setViewModalType] = useState<'subjects' | 'videos' | 'assignments' | 'students' | 'departments' | 'teachers' | 'users' | 'deptSubjects' | null>(null);
 
   function getYoutubeEmbedUrl(url: string): string | null {
     try {
@@ -539,9 +651,23 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
   return (
     <div className={styles.container}>
+      {toast && (
+        <div style={{
+          position: 'fixed',
+          top: 12,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 99999,
+          background: toast.type === 'success' ? '#4caf50' : toast.type === 'info' ? '#2196f3' : '#f44336',
+          color: 'white',
+          padding: '10px 16px',
+          borderRadius: 6,
+          boxShadow: '0 2px 6px rgba(0,0,0,0.2)'
+        }}>{toast.message}</div>
+      )}
       <nav className={styles.navbar}>
         <div className={styles.navContent}>
-          <img src="../src/sh.jpg" alt="الشعار" className={styles.logo} />
+          <img src="../src/sh.png" alt="الشعار" className={styles.logo} />
           <div className={styles.userMenu}>
             <span>{user.id}</span>
             <button onClick={logout} className={styles.logoutBtn}>تسجيل الخروج</button>
@@ -575,9 +701,9 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                       <img src="../src/svg/book.svg" alt="" style={{ width: '28px', height: '28px' }} />
 
                     </div>
-                    <div style={{ marginTop: '12px' }}>
-                      <p onClick={(e) => {e.stopPropagation(); setAddModalType('department')}} style={{ cursor: 'pointer', textAlign: 'center' }}>إضافة قسم جديد</p>
-                      <p onClick={(e) => {e.stopPropagation(); setViewModalType('departments')}} style={{ cursor: 'pointer', textAlign: 'center' }}>عرض الأقسام ({filteredDepartments.length})</p>
+                    <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                      <p onClick={(e) => {e.stopPropagation(); setAddModalType('department')}} style={{ cursor: 'pointer', textAlign: 'right' }}>إضافة قسم جديد</p>
+                      <p onClick={(e) => {e.stopPropagation(); setViewModalType('departments')}} style={{ cursor: 'pointer', textAlign: 'right' }}>عرض الأقسام ({filteredDepartments.length})</p>
                     </div>
                   </div>
                   {user.role === 'admin' && (
@@ -586,25 +712,13 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                         <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px' }}>إدارة المستخدمين</h4>
                         <img src="../src/svg/student.svg" alt="" style={{ width: '28px', height: '28px' }} />
                       </div>
-                      <div style={{ marginTop: '12px' }}>
-                        <p onClick={(e) => {e.stopPropagation(); setAddModalType('student')}} style={{ cursor: 'pointer', textAlign: 'center' }}>إضافة مستخدم جديد</p>
-                        <p onClick={(e) => {e.stopPropagation(); setViewModalType('users')}} style={{ cursor: 'pointer', textAlign: 'center' }}>عرض مستخدمين ({filteredUsers.length})</p>
+                      <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                        <p onClick={(e) => {e.stopPropagation(); setAddModalType('student')}} style={{ cursor: 'pointer', textAlign: 'right' }}>إضافة مستخدم جديد</p>
+                        <p onClick={(e) => {e.stopPropagation(); setViewModalType('users')}} style={{ cursor: 'pointer', textAlign: 'right' }}>عرض مستخدمين ({filteredUsers.length})</p>
                       </div>
                     </div>
                   )}
-                  {user.role === 'admin' && (
-                    <div onClick={() => setActiveTab('teachers')} style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', cursor: 'pointer' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px' }}>
-                        <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px' }}>أعضاء هيئة التدريس</h4>
-                        <img src="../src/svg/assignment.svg" alt="" style={{ width: '28px', height: '28px' }} />
-
-                      </div>
-                      <div style={{ marginTop: '12px' }}>
-                        <p onClick={(e) => {e.stopPropagation(); setAddModalType('teacher')}} style={{ cursor: 'pointer', textAlign: 'right' }}>إضافة مدير قسم جديد</p>
-                        <p onClick={(e) => {e.stopPropagation(); setViewModalType('teachers')}} style={{ cursor: 'pointer', textAlign: 'right' }}>عرض مديري القسم ({filteredTeachers.length})</p>
-                      </div>
-                    </div>
-                  )}
+                  
                   {((user.role === 'department_manager') || (user.role === 'teacher')) && (
                     <div onClick={() => setActiveTab('subjects')} style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', cursor: 'pointer' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px' }}>
@@ -630,6 +744,30 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                     </div>
                   )}
 
+                  {/* Notifications card */}
+                  <div  style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', cursor: 'pointer' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px' }}>
+                      <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px' }}>التنبيهات</h4>
+                      <img src="../src/svg/notification.svg" alt="" style={{ width: '28px', height: '28px' }} />
+                    </div>
+                    <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                          <p onClick={() => openNotifModal({ openTab: 'messages' })} style={{ margin: 0, textAlign: 'right', cursor: 'pointer' }}> الرسايل {unreadMessagesCount > 0 ? `(${unreadMessagesCount})` : ''}</p>
+                          <p onClick={() => openNotifModal({ openTab: 'notifications', onlyForCurrentUser: true })} style={{ margin: 0, textAlign: 'right', cursor: 'pointer' }}> التنبيهات {unreadNotificationsCount > 0 ? `(${unreadNotificationsCount})` : ''}</p>
+                        </div>
+                  </div>
+
+                  {/* Department courses management card */}
+                  <div style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', cursor: 'pointer' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px' }}>
+                      <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px' }}>ادارة مقررات الدراسية</h4>
+                      <img src="../src/svg/book.svg" alt="" style={{ width: '28px', height: '28px' }} />
+                    </div>
+                    <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                      <p onClick={(e) => { e.stopPropagation(); setShowDeptSubjectsModal(true); }} style={{ margin: 0, textAlign: 'right', cursor: 'pointer' }}>عرض المواد التابعه للقسم</p>
+                      <p onClick={(e) => { e.stopPropagation(); setShowAddSubjectModal(true); }} style={{ margin: 0, textAlign: 'right', cursor: 'pointer' }}>اضافة مادة جديدة</p>
+                    </div>
+                  </div>
+
                 </div>
 
                 {/* لوحة عرض الأقسام أزيلت حسب الطلب (لا تظهر هنا). */}
@@ -638,7 +776,12 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                   <div>
                     <div style={{ marginBottom: '30px', padding: '20px', border: '1px solid #000', borderRadius: '8px' }}>
                       <h4>إضافة مستخدم جديد</h4>
-                      <AddUserForm departments={departments} onAdd={handleAddUser} />
+                      <AddUserForm
+                        departments={departments}
+                        onAdd={handleAddUser}
+                        showToast={showToast}
+                        allowedRoles={['user', 'department_manager', 'teacher', 'admin']}
+                      />
                     </div>
                     <h3>المستخدمين</h3>
                     <div className={styles.subTabs}>
@@ -652,7 +795,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                         onClick={() => setUserFilter('user')}
                         className={`${styles.tabButton} ${userFilter === 'user' ? styles.active : ''}`}
                       >
-                        مستخدم عادي ({users.filter(u => u.role === 'user').length})
+                        طالب ({users.filter(u => u.role === 'user').length})
                       </button>
                       <button 
                         onClick={() => setUserFilter('teacher')}
@@ -678,7 +821,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                               <h4 className={styles.cardTitle}>{u.name || u.id}</h4>
                               <p className={styles.cardDesc}>المستخدم: {u.id}</p>
                               <p className={styles.cardDesc}>
-                                الدور: {u.role === 'admin' ? 'مسؤول النظام' : u.role === 'department_manager' ? 'دكتور' : u.role === 'teacher' ? 'مدير القسم' : 'مستخدم عادي'}
+                                الدور: {u.role === 'admin' ? 'مسؤول النظام' : u.role === 'department_manager' ? 'دكتور' : u.role === 'teacher' ? 'مدير القسم' : 'طالب'}
                               </p>
                               {u.departmentId && <p className={styles.cardDesc}>القسم: {dept ? dept.name : 'غير محدد'}</p>}
                               <div className={styles.cardActions}>
@@ -857,7 +1000,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                                     </button>
                                     <button
                                       onClick={async () => {
-                                        if (teacherSubjects.length === 0) return alert('لا توجد مواد مرتبطة بهذا مدير القسم');
+                                        if (teacherSubjects.length === 0) return showToast('لا توجد مواد مرتبطة بهذا مدير القسم', 'error');
                                         const subjOptions = teacherSubjects.map(s => `${s.id}|${s.name}`).join('\n');
                                         const sel = prompt('اختر المادة عبر السطر المبين (الصيغة id|name):\n' + subjOptions);
                                         if (!sel) return;
@@ -871,11 +1014,11 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                                             body: JSON.stringify({ addStudent: studentId }),
                                           });
                                           if (res.ok) {
-                                            alert('تم إضافة الطالب بنجاح');
+                                            showToast && showToast('تم إضافة الطالب بنجاح', 'success');
                                             loadData();
                                           } else {
                                             const txt = await res.text();
-                                            alert('فشل الإضافة: ' + txt);
+                                            showToast && showToast('فشل الإضافة: ' + txt, 'error');
                                           }
                                         } catch (e) {
                                           console.error(e);
@@ -1131,7 +1274,169 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
               <AddDepartmentForm onAdd={(name, description) => { handleAddDept(name, description); setAddModalType(null); }} />
             )}
             {addModalType === 'student' && (
-              <AddUserForm departments={departments} onAdd={(userId, name, role, password, departmentId) => { handleAddUser(userId, name, 'user', password, departmentId || user.departmentId); setAddModalType(null); }} allowedRoles={['user']} />
+              <AddUserForm
+                departments={departments}
+                onAdd={async (userId, name, role, password, departmentId) => {
+                  const ok = await handleAddUser(userId, name, role, password, departmentId || user.departmentId);
+                  if (ok) setAddModalType(null);
+                  return ok;
+                }}
+                showToast={showToast}
+                allowedRoles={['user', 'department_manager', 'teacher', 'admin']}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {showNotifModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999 }}>
+          <div style={{ background: 'white', padding: '20px', maxWidth: '600px', width: '90%', borderRadius: 8, position: 'relative', direction: 'rtl' }}>
+            <button onClick={() => setShowNotifModal(false)} style={{ position: 'absolute', left: 8, top: 8, fontSize: 20, border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
+            <h2 style={{ marginTop: 0, marginBottom: 12 }}>إرسال تنبيه</h2>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <button onClick={() => setNotifView('send')} style={{ padding: '8px 12px', background: notifView === 'send' ? '#1976d2' : '#e0e0e0', color: notifView === 'send' ? 'white' : 'black', border: 'none', borderRadius: 6, cursor: 'pointer' }}>إرسال</button>
+              <button onClick={() => { try { const rawMsgs = typeof window !== 'undefined' ? localStorage.getItem('app_messages') || '[]' : '[]'; setSentMessages(Array.isArray(JSON.parse(rawMsgs)) ? JSON.parse(rawMsgs) : []); } catch(e){ setSentMessages([]);} setNotifView('messages'); }} style={{ padding: '8px 12px', background: notifView === 'messages' ? '#1976d2' : '#e0e0e0', color: notifView === 'messages' ? 'white' : 'black', border: 'none', borderRadius: 6, cursor: 'pointer' }}>الرسائل المرسلة</button>
+              <button onClick={() => { try { const rawNot = typeof window !== 'undefined' ? localStorage.getItem('app_notifications') || '[]' : '[]'; setSentNotifications(Array.isArray(JSON.parse(rawNot)) ? JSON.parse(rawNot) : []); } catch(e){ setSentNotifications([]);} setNotifView('notifications'); }} style={{ padding: '8px 12px', background: notifView === 'notifications' ? '#1976d2' : '#e0e0e0', color: notifView === 'notifications' ? 'white' : 'black', border: 'none', borderRadius: 6, cursor: 'pointer' }}>التنبيهات المرسلة</button>
+
+            </div>
+
+            {notifView === 'send' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <label>نوع الإرسال</label>
+                <select value={notifMode} onChange={(e) => setNotifMode(e.target.value as any)} className={styles.searchInput}>
+                  <option value="message">رسالة (بث)</option>
+                  <option value="notification">تنبيه (خاص لمستخدم)</option>
+                </select>
+
+                {notifMode === 'message' ? (
+                  <>
+                    <label>اختر المستلمين</label>
+                    <select value={notifTarget} onChange={(e) => setNotifTarget(e.target.value as any)} className={styles.searchInput}>
+                      <option value="all">الكل</option>
+                      <option value="departments">أقسام</option>
+                      <option value="doctor">دكتور</option>
+                      <option value="students">طلاب</option>
+                    </select>
+                  </>
+                ) : (
+                  <>
+                    <label>اختر المستخدم (التنبيه خاص)</label>
+                    <select value={notifRecipient} onChange={(e) => setNotifRecipient(e.target.value)} className={styles.searchInput}>
+                      <option value="">اختر المستخدم</option>
+                      {users.filter(u => u.id !== user?.id).map(u => (
+                        <option key={u.id} value={u.id}>{u.name || u.id} — {u.role}</option>
+                      ))}
+                    </select>
+                  </>
+                )}
+
+                <label>نص الرسالة</label>
+                <textarea value={notifMessage} onChange={(e) => setNotifMessage(e.target.value)} className={`${styles.searchInput}`} rows={5} />
+
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-start' }}>
+                  <button
+                    onClick={() => {
+                      if (!notifMessage.trim()) { showToast('اكتب نص الرسالة', 'error'); return; }
+                      try {
+                        if (notifMode === 'notification') {
+                          if (!notifRecipient) { showToast('اختر مستخدم للتنبيه', 'error'); return; }
+                          const notif = {
+                            id: Date.now().toString(),
+                            to: notifRecipient,
+                            from: user?.id || 'system',
+                            fromName: user?.name || user?.id || 'مستخدم',
+                            message: notifMessage.trim(),
+                            date: new Date().toISOString(),
+                          };
+                          const raw = localStorage.getItem('app_notifications') || '[]';
+                          const arr = JSON.parse(raw);
+                          if (!Array.isArray(arr)) arr.length = 0;
+                          arr.unshift(notif);
+                          localStorage.setItem('app_notifications', JSON.stringify(arr));
+                          setSentNotifications(prev => [notif, ...prev]);
+                        } else {
+                          const msg = {
+                            id: Date.now().toString(),
+                            to: notifTarget,
+                            from: user?.id || 'system',
+                            fromName: user?.name || user?.id || 'مستخدم',
+                            message: notifMessage.trim(),
+                            date: new Date().toISOString(),
+                          };
+                          const raw = localStorage.getItem('app_messages') || '[]';
+                          const arr = JSON.parse(raw);
+                          if (!Array.isArray(arr)) arr.length = 0;
+                          arr.unshift(msg);
+                          localStorage.setItem('app_messages', JSON.stringify(arr));
+                          setSentMessages(prev => [msg, ...prev]);
+                        }
+                        showToast('تم الإرسال', 'success');
+                        try { refreshNotifCounts(); } catch (e) {}
+                        setNotifMessage('');
+                        setNotifTarget('all');
+                        setNotifRecipient('');
+                        setNotifMode('message');
+                        setShowNotifModal(false);
+                      } catch (e) {
+                        console.error(e);
+                        showToast('فشل الإرسال', 'error');
+                      }
+                    }}
+                    className={styles.btnPrimary}
+                  >
+                    إرسال
+                  </button>
+
+                  <button onClick={() => setShowNotifModal(false)} className={styles.btnSecondary}>رجوع</button>
+                </div>
+              </div>
+            ) : notifView === 'messages' ? (
+              <div style={{ maxHeight: '50vh', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div>
+                  <h4 style={{ margin: '6px 0' }}>الرسائل</h4>
+                  {sentMessages.length === 0 ? (
+                    <p className={styles.small}>لا توجد رسائل</p>
+                  ) : (
+                    sentMessages.map((m, i) => (
+                      <div key={m.id} style={{ border: '1px solid #eee', padding: 10, borderRadius: 6, background: '#fafafa', marginBottom: 8 }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <span style={{ background: '#1976d2', color: 'white', padding: '2px 8px', borderRadius: 12, fontSize: 12 }}>{i + 1}</span>
+                            <strong>{m.fromName}</strong>
+                          </div>
+                          <span style={{ fontSize: 12, color: '#666' }}>{new Date(m.date).toLocaleString()}</span>
+                        </div>
+                        <div style={{ marginTop: 6 }}>{m.message}</div>
+                        <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>المستلم: {m.to}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div style={{ maxHeight: '50vh', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div>
+                  <h4 style={{ margin: '6px 0' }}>التنبيهات</h4>
+                  {sentNotifications.length === 0 ? (
+                    <p className={styles.small}>لا توجد تنبيهات</p>
+                  ) : (
+                    sentNotifications.map((n, idx) => (
+                      <div key={n.id} style={{ border: '1px solid #eee', padding: 10, borderRadius: 6, background: '#fff8e1', marginBottom: 8 }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <span style={{ background: '#ff9800', color: 'white', padding: '2px 8px', borderRadius: 12, fontSize: 12 }}>{idx + 1}</span>
+                            <strong>{n.fromName}</strong>
+                          </div>
+                          <span style={{ fontSize: 12, color: '#666' }}>{new Date(n.date).toLocaleString()}</span>
+                        </div>
+                        <div style={{ marginTop: 6 }}>{n.message}</div>
+                        <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>المستلم: {n.to}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -1404,31 +1709,127 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             )}
             {viewModalType === 'departments' && (
               <div>
-                {filteredDepartments.length === 0 ? (
-                  <p>لا توجد أقسام</p>
-                ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
-                    {filteredDepartments.map(dept => (
-                      <div key={dept.id} style={{
-                        border: '1px solid #000',
-                        padding: '10px',
-                        borderRadius: '8px',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                      }}>
-                        <h5 style={{ margin: '0 0 8px 0' }}>{dept.name}</h5>
-                        <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>{dept.description}</p>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <button onClick={() => handleEditDept(dept.id)} style={{ padding: '4px 8px', fontSize: '12px' }}>تعديل</button>
-                          {user.role === 'admin' && (
-                            <button onClick={() => handleDeleteDept(dept.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
-                          )}
-                        </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+                  <input
+                    type="text"
+                    placeholder="ابحث عن قسم..."
+                    value={modalDeptSearchTerm}
+                    onChange={(e) => setModalDeptSearchTerm(e.target.value)}
+                    className={styles.searchInput}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                {(() => {
+                  const q = (modalDeptSearchTerm || '').toLowerCase();
+                  const list = filteredDepartments.filter(d => {
+                    if (!q) return true;
+                    return (d.name || '').toLowerCase().includes(q) || (d.description || '').toLowerCase().includes(q);
+                  });
+                  if (list.length === 0) return <p>لا توجد أقسام</p>;
+                  return (
+                    <div
+                      ref={deptListRef}
+                      className={styles.modalListContainer}
+                      onWheel={(e) => {
+                        // ensure inner container scrolls with mouse wheel and prevent outer modal scroll
+                        const el = deptListRef.current;
+                        if (!el) return;
+                        el.scrollBy({ top: e.deltaY, behavior: 'auto' });
+                        e.preventDefault();
+                      }}
+                    >
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+                        {list.map(dept => (
+                          <div key={dept.id} style={{
+                            border: '1px solid #000',
+                            padding: '10px',
+                            borderRadius: '8px',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                          }}>
+                            <h5 style={{ margin: '0 0 8px 0' }}>{dept.name}</h5>
+                            <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>{dept.description}</p>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button onClick={() => handleEditDept(dept.id)} style={{ padding: '4px 8px', fontSize: '12px' }}>تعديل</button>
+                              {user.role === 'admin' && (
+                                <button onClick={() => handleDeleteDept(dept.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {showDeptSubjectsModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999 }}>
+          <div style={{ background: 'white', padding: '20px', maxWidth: '800px', width: '90%', maxHeight: '80vh', overflow: 'auto', borderRadius: 8, position: 'relative', direction: 'rtl' }}>
+            <button onClick={() => setShowDeptSubjectsModal(false)} style={{ position: 'absolute', left: 8, top: 8, fontSize: 20, border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
+            <h2 style={{ marginTop: 0, marginBottom: 12 }}>المواد التابعة للقسم</h2>
+            <p style={{ marginTop: 0, marginBottom: 12 }}>القسم: {departments.find(d => d.id === user.departmentId)?.name || 'غير محدد'}</p>
+
+            
+
+            <div>
+              <h4>استعراض المواد</h4>
+              {(() => {
+                const list = Array.isArray(subjects) ? subjects.filter(s => s.departmentId === user.departmentId || (!s.departmentId && departments[0] && departments[0].id === user.departmentId)) : [];
+                if (list.length === 0) return <p>لا توجد مواد</p>;
+                return (
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    {list.map((subject: any) => {
+                      const teacher = teachers.find(t => t.id === subject.teacherId);
+                      return (
+                        <div key={subject.id} style={{ border: '1px solid #000', padding: 10, borderRadius: 8 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <strong style={{ fontSize: 14 }}>{subject.name}</strong>
+                              <div style={{ fontSize: 12, color: '#666' }}>{teacher ? `الدكتور: ${teacher.name || teacher.id}` : 'بدون دكتور'}</div>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              {(user.role === 'admin') ? (
+                                <button onClick={() => { handleDeleteSubject(subject.id); setTimeout(() => { if (user?.role === 'admin') loadData(); else if (user?.departmentId) loadDepartmentData(user.departmentId); }, 300); }} style={{ padding: '6px 10px' }}>حذف</button>
+                              ) : (
+                                <button onClick={() => { handleDeleteSubjectForManager(subject.id); setTimeout(() => { if (user?.departmentId) loadDepartmentData(user.departmentId); }, 300); }} style={{ padding: '6px 10px' }}>حذف</button>
+                              )}
+                            </div>
+                          </div>
+                          {subject.description && <p style={{ marginTop: 8 }}>{subject.description}</p>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {showAddSubjectModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999 }}>
+          <div style={{ background: 'white', padding: '20px', maxWidth: '720px', width: '90%', maxHeight: '80vh', overflow: 'auto', borderRadius: 8, position: 'relative', direction: 'rtl' }}>
+            <button onClick={() => setShowAddSubjectModal(false)} style={{ position: 'absolute', left: 8, top: 8, fontSize: 20, border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
+            <h2 style={{ marginTop: 0, marginBottom: 12 }}>اضافة مادة جديدة</h2>
+            <div style={{ padding: 10, border: '1px solid #eee', borderRadius: 6 }}>
+              <AddSubjectForm
+                departments={departments}
+                teachers={teachers}
+                onAdd={(name, desc, deptId, teacherId) => {
+                  handleAddSubject(name, desc, user.departmentId || deptId, user.role === 'teacher' ? user.id : teacherId);
+                  setTimeout(() => { if (user?.departmentId) loadDepartmentData(user.departmentId); }, 300);
+                  setShowAddSubjectModal(false);
+                }}
+                user={user}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -1615,7 +2016,7 @@ function AddDepartmentForm({ onAdd }: { onAdd: (name: string, description: strin
   );
 }
 
-function AddUserForm({ departments, subjects, onAdd, allowedRoles = ['user', 'teacher', 'department_manager', 'admin'] }: { departments?: any[], subjects?: any[], onAdd: (userId: string, name: string, role: string, password: string, departmentId?: string, subjectId?: string) => void, allowedRoles?: string[] }) {
+function AddUserForm({ departments, subjects, onAdd, allowedRoles = ['user', 'teacher', 'department_manager', 'admin'], showToast }: { departments?: any[], subjects?: any[], onAdd: (userId: string, name: string, role: string, password: string, departmentId?: string, subjectId?: string) => Promise<boolean> | boolean | void, allowedRoles?: string[], showToast?: (msg: string, type?: 'success'|'error'|'info') => void }) {
   const [userId, setUserId] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState('user');
@@ -1623,12 +2024,20 @@ function AddUserForm({ departments, subjects, onAdd, allowedRoles = ['user', 'te
   const [departmentId, setDepartmentId] = useState('');
   const [subjectId, setSubjectId] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  React.useEffect(() => {
+    if (role === 'admin') setDepartmentId('');
+  }, [role]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userId.trim()) { alert('يرجى إدخال اسم المستخدم'); return; }
-    if (!name.trim()) { alert('يرجى إدخال الاسم الكامل'); return; }
-    if (!password.trim()) { alert('يرجى إدخال كلمة المرور'); return; }
-    onAdd(userId.trim(), name.trim(), role, password, departmentId || undefined, subjectId || undefined);
+    if (!userId.trim()) { if (showToast) showToast('يرجى إدخال اسم المستخدم','error'); else alert('يرجى إدخال اسم المستخدم'); return; }
+    if (!name.trim()) { if (showToast) showToast('يرجى إدخال الاسم الكامل','error'); else alert('يرجى إدخال الاسم الكامل'); return; }
+    if (!password.trim()) { if (showToast) showToast('يرجى إدخال كلمة المرور','error'); else alert('يرجى إدخال كلمة المرور'); return; }
+    // If subjects are not provided (we show department select) then department is required for non-admin roles
+    if (!subjects && role !== 'admin' && !departmentId) { if (showToast) showToast('اختر القسم أولاً','error'); else alert('اختر القسم أولاً'); return; }
+    const res = await onAdd(userId.trim(), name.trim(), role, password, departmentId || undefined, subjectId || undefined);
+    // if onAdd returns false, keep form as-is (error). On success (true/undefined), reset form.
+    if (res === false) return;
     setUserId('');
     setName('');
     setPassword('');
@@ -1671,7 +2080,7 @@ function AddUserForm({ departments, subjects, onAdd, allowedRoles = ['user', 'te
         {allowedRoles.includes('admin') && <option value="admin">مسؤول النظام</option>}
         {allowedRoles.includes('department_manager') && <option value="department_manager">دكتور</option>}
         {allowedRoles.includes('teacher') && <option value="teacher">مدير القسم</option>}
-        {allowedRoles.includes('user') && <option value="user">مستخدم عادي</option>}
+        {allowedRoles.includes('user') && <option value="user">طالب</option>}
         
         
         
@@ -1688,16 +2097,19 @@ function AddUserForm({ departments, subjects, onAdd, allowedRoles = ['user', 'te
           ))}
         </select>
       ) : (
-        <select
-          value={departmentId}
-          onChange={(e) => setDepartmentId(e.target.value)}
-          style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
-        >
-          <option value="">اختر القسم (اختياري)</option>
-          {departments?.map((dept) => (
-            <option key={dept.id} value={dept.id}>{dept.name}</option>
-          ))}
-        </select>
+        role !== 'admin' && (
+          <select
+            value={departmentId}
+            onChange={(e) => setDepartmentId(e.target.value)}
+            required={role !== 'admin'}
+            style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
+          >
+            <option value="">اختر القسم {role !== 'admin' ? '(مطلوب)' : '(اختياري)'}</option>
+            {departments?.map((dept) => (
+              <option key={dept.id} value={dept.id}>{dept.name}</option>
+            ))}
+          </select>
+        )
       )}
       <button type="submit" style={{ padding: '10px', background: '#1565c0', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
         إضافة المستخدم
