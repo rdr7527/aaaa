@@ -56,3 +56,46 @@ input, button, textarea, select {
     font-size: 14px;
   }
 }
+
+/* Global app logo class for consistent sizing across pages */
+.appLogo {
+  width: clamp(180px, 8vw, 220px) !important;
+  height: auto !important;
+  max-height: 220px;
+  object-fit: contain !important;
+  display: inline-block;
+}
+
+@media (min-width: 768px) {
+  .appLogo {
+    width: 110px !important;
+    height: auto !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .appLogo {
+    width: clamp(48px, 18vw, 120px) !important;
+  }
+}
+
+/* Logo sizing for desktop screens in pages with header */
+@media (min-width: 768px) {
+  img[src$="sh.png"], img[src$="/sh.png"] {
+    width: 110px !important;
+    height: auto !important;
+  }
+}
+
+/* Special sizing for login page logo */
+.login-logo {
+  width: clamp(210px, 15vw, 280px) !important;
+  height: auto !important;
+  object-fit: contain !important;
+}
+
+@media (max-width: 480px) {
+  .login-logo {
+    width: 250px !important;
+  }
+}
