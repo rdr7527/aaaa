@@ -125,7 +125,7 @@ export default function AdminPanel() {
     <div className={styles.container}>
       <header className={styles.navbar} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <img src="../src/sh.png" alt="الشعار" style={{ width: '48px', height: '48px', objectFit: 'contain' }} />
+          <img src="../src/sh.png" alt="الشعار" className="appLogo" />
           <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
             <span style={{ fontSize: '16px', fontWeight: 700 }}>منارة المعرفة</span>
             <small style={{ fontSize: '12px', color: '#ffffffcc' }}>إدارة النظام</small>
