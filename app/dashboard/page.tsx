@@ -18,6 +18,7 @@ export default function Dashboard() {
   const [videos, setVideos] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+  const [books, setBooks] = useState<any[]>([]);
   const [showAddAssignment, setShowAddAssignment] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -47,9 +48,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             router.push('/department');
           }
           // Keep department managers on the dashboard
-          // Teachers go to deputy
-          if (data.user.role === 'teacher') return router.push('/deputy');
-          if (data.user.role !== 'admin' && data.user.role !== 'department_manager' && data.user.departmentId) {
+          if (data.user.role !== 'admin' && data.user.role !== 'department_manager' && data.user.role !== 'teacher' && data.user.departmentId) {
             router.push('/department');
           }
         } else {
@@ -106,6 +105,12 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       if (subjRes.ok) {
         const subjData = await subjRes.json();
         setSubjects(subjData.subjects || []);
+      }
+
+      const libRes = await fetch('/api/library');
+      if (libRes.ok) {
+        const libData = await libRes.json();
+        setBooks(libData || []);
       }
 
       const vidRes = await fetch('/api/videos');
@@ -420,6 +425,47 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     }
   };
 
+  const handleAddBook = async (title: string, url: string, departmentId: string) => {
+    console.log('Adding book:', { title, url, departmentId });
+    try {
+      const res = await fetch('/api/library', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, url, departmentId }),
+      });
+      console.log('Response status:', res.status);
+      if (res.ok) {
+        const newBook = await res.json();
+        setBooks(prev => [...prev, newBook]);
+        loadData();
+        showToast('تم إضافة الكتاب بنجاح', 'success');
+      } else {
+        const errorText = await res.text();
+        console.log('Error response:', errorText);
+        showToast('فشل في إضافة الكتاب', 'error');
+      }
+    } catch (e) {
+      console.error('Error adding book:', e);
+      showToast('خطأ في الإضافة', 'error');
+    }
+  };
+
+  const handleDeleteBook = async (bookId: string) => {
+    if (!confirm('هل تريد حذف هذا الكتاب؟')) return;
+    try {
+      const res = await fetch(`/api/library?id=${bookId}`, { method: 'DELETE' });
+      if (res.ok) {
+        loadData();
+        showToast('تم حذف الكتاب', 'success');
+      } else {
+        showToast('فشل في الحذف', 'error');
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('خطأ في الحذف', 'error');
+    }
+  };
+
   const handleDeleteSubjectForManager = async (subjectId: string) => {
     if (!user) return;
     if (!confirm('هل تريد حذف هذه المادة؟')) return;
@@ -493,6 +539,15 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   };
 
   const [selectedVideo, setSelectedVideo] = useState<{ video: any; subjectId?: string } | null>(null);
+
+  // Graduation projects states
+  const [graduationProjects, setGraduationProjects] = useState<any[]>([]);
+  const [showGradModal, setShowGradModal] = useState(false);
+  const [gradFile, setGradFile] = useState<File | null>(null);
+  const [uploadingGrad, setUploadingGrad] = useState(false);
+  const [gradTitle, setGradTitle] = useState('');
+  const [gradDeptId, setGradDeptId] = useState<string | null>(null);
+  const [gradSearchTerm, setGradSearchTerm] = useState('');
 
   const [toast, setToast] = useState<{ message: string; type?: 'success' | 'error' | 'info' } | null>(null);
 
@@ -584,9 +639,71 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     // refresh counts on mount and when user changes
     refreshNotifCounts();
   }, [user?.id]);
+  
+  useEffect(() => {
+    if (!user) return;
+    if (user.role === 'admin') {
+      // load graduation projects for admin
+      (async () => {
+        try {
+          const res = await fetch('/api/graduation_projects');
+          if (res.ok) {
+            const body = await res.json();
+            setGraduationProjects(body.projects || []);
+          }
+        } catch (e) {
+          console.error('فشل جلب مشاريع التخرج', e);
+        }
+      })();
+    }
+  }, [user]);
+
+  const loadGraduationProjects = async () => {
+    try {
+      const res = await fetch('/api/graduation_projects');
+      if (res.ok) {
+        const body = await res.json();
+        setGraduationProjects(body.projects || []);
+      }
+    } catch (e) {
+      console.error('فشل جلب مشاريع التخرج', e);
+    }
+  };
+
+  const handleUploadGraduationProject = async () => {
+    if (!gradFile) return showToast('اختر ملف PDF للرفع', 'error');
+    if (gradFile.type !== 'application/pdf') return showToast('الملف يجب أن يكون PDF', 'error');
+    if (!gradTitle || !gradTitle.trim()) return showToast('أدخل عنوانًا للمشروع', 'error');
+    if (!gradDeptId) return showToast('اختر القسم الذي سينتمي إليه المشروع', 'error');
+    setUploadingGrad(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', gradFile, gradFile.name);
+      fd.append('title', gradTitle.trim());
+      fd.append('departmentId', gradDeptId);
+      const res = await fetch('/api/graduation_projects', { method: 'POST', body: fd, credentials: 'include' });
+      if (res.ok) {
+        const body = await res.json();
+        setGraduationProjects(prev => [body.project, ...prev]);
+        setGradFile(null);
+        setGradTitle('');
+        setGradDeptId(null);
+        setShowGradModal(false);
+        showToast('تم رفع المشروع بنجاح', 'success');
+      } else {
+        const text = await res.text().catch(() => 'فشل الرفع');
+        showToast(text || 'فشل الرفع', 'error');
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('فشل الرفع', 'error');
+    } finally {
+      setUploadingGrad(false);
+    }
+  };
   const [addModalType, setAddModalType] = useState<'subject' | 'video' | 'assignment' | 'student' | 'department' | 'teacher' | null>(null);
 
-  const [viewModalType, setViewModalType] = useState<'subjects' | 'videos' | 'assignments' | 'students' | 'departments' | 'teachers' | 'users' | 'deptSubjects' | null>(null);
+  const [viewModalType, setViewModalType] = useState<'subjects' | 'videos' | 'assignments' | 'students' | 'departments' | 'teachers' | 'users' | 'deptSubjects' | 'graduation_projects' | null>(null);
 
   function getYoutubeEmbedUrl(url: string): string | null {
     try {
@@ -684,87 +801,104 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                 <p className={styles.role}>مسؤول</p>
               </div>
               <div className={styles.content}>
-                <div className={styles.searchSection}>
-                  <input
-                    type="text"
-                    placeholder="ابحث عن قسم أو مادة أو فيديو..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className={styles.searchInput}
-                  />
-                </div>
+                
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '18px', marginTop: '22px', direction: 'ltr' }}>
-                  <div onClick={() => setActiveTab('departments')} style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', cursor: 'pointer' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px' }}>
-                      <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px' }}>إدارة الأقسام</h4>
-                      <img src="../src/svg/book.svg" alt="" style={{ width: '28px', height: '28px' }} />
-
+                <div className={styles.cardGrid}>
+                  <div className={styles.cardItem} onClick={() => setActiveTab('departments')}>
+                    <div className={styles.cardItemContent}>
+                      <h4>إدارة الأقسام</h4>
+                      <img src="../src/svg/book.svg" alt="" />
                     </div>
-                    <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                      <p onClick={(e) => {e.stopPropagation(); setAddModalType('department')}} style={{ cursor: 'pointer', textAlign: 'right' }}>إضافة قسم جديد</p>
-                      <p onClick={(e) => {e.stopPropagation(); setViewModalType('departments')}} style={{ cursor: 'pointer', textAlign: 'right' }}>عرض الأقسام ({filteredDepartments.length})</p>
+                    <div className={styles.cardItemActions}>
+                      <p onClick={(e) => {e.stopPropagation(); setAddModalType('department')}}>إضافة قسم جديد</p>
+                      <p onClick={(e) => {e.stopPropagation(); setViewModalType('departments')}}>عرض الأقسام ({filteredDepartments.length})</p>
                     </div>
                   </div>
                   {user.role === 'admin' && (
-                    <div style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', cursor: 'pointer' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px' }}>
-                        <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px' }}>إدارة المستخدمين</h4>
-                        <img src="../src/svg/student.svg" alt="" style={{ width: '28px', height: '28px' }} />
+                    <div className={styles.cardItem}>
+                      <div className={styles.cardItemContent}>
+                        <h4>إدارة المستخدمين</h4>
+                        <img src="../src/svg/student.svg" alt="" />
                       </div>
-                      <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                        <p onClick={(e) => {e.stopPropagation(); setAddModalType('student')}} style={{ cursor: 'pointer', textAlign: 'right' }}>إضافة مستخدم جديد</p>
-                        <p onClick={(e) => {e.stopPropagation(); setViewModalType('users')}} style={{ cursor: 'pointer', textAlign: 'right' }}>عرض مستخدمين ({filteredUsers.length})</p>
+                      <div className={styles.cardItemActions}>
+                        <p onClick={(e) => {e.stopPropagation(); setAddModalType('student')}}>إضافة مستخدم جديد</p>
+                        <p onClick={(e) => {e.stopPropagation(); setViewModalType('users')}}>عرض مستخدمين ({filteredUsers.length})</p>
                       </div>
                     </div>
                   )}
                   
                   {((user.role === 'department_manager') || (user.role === 'teacher')) && (
-                    <div onClick={() => setActiveTab('subjects')} style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', cursor: 'pointer' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px' }}>
-                        <img src="../src/svg/book.svg" alt="" style={{ width: '28px', height: '28px' }} />
-                        <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px' }}>إدارة المواد</h4>
+                    <div className={styles.cardItem} onClick={() => setActiveTab('subjects')}>
+                      <div className={styles.cardItemContent}>
+                        <img src="../src/svg/book.svg" alt="" />
+                        <h4>إدارة المواد</h4>
                       </div>
-                      <div style={{ marginTop: '12px' }}>
-                        <p onClick={(e) => {e.stopPropagation(); setAddModalType('subject')}} style={{ cursor: 'pointer', textAlign: 'center' }}>إضافة مادة</p>
-                        <p onClick={(e) => {e.stopPropagation(); setViewModalType('subjects')}} style={{ cursor: 'pointer', textAlign: 'center' }}>عرض المواد ({filteredSubjects.length})</p>
+                      <div className={styles.cardItemActions}>
+                        <p onClick={(e) => {e.stopPropagation(); setAddModalType('subject')}}>إضافة مادة</p>
+                        <p onClick={(e) => {e.stopPropagation(); setViewModalType('subjects')}}>عرض المواد ({filteredSubjects.length})</p>
                       </div>
                     </div>
                   )}
                   {user.role === 'department_manager' && (
-                    <div onClick={() => setActiveTab('videos')} style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', cursor: 'pointer' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px' }}>
-                        <img src="../src/svg/video.svg" alt="" style={{ width: '28px', height: '28px' }} />
-                        <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px' }}>إدارة الفيديوهات</h4>
+                    <div className={styles.cardItem} onClick={() => setActiveTab('videos')}>
+                      <div className={styles.cardItemContent}>
+                        <img src="../src/svg/video.svg" alt="" />
+                        <h4>إدارة الفيديوهات</h4>
                       </div>
-                      <div style={{ marginTop: '12px' }}>
-                        <p onClick={(e) => {e.stopPropagation(); setAddModalType('video')}} style={{ cursor: 'pointer', textAlign: 'center' }}>إضافة درس</p>
-                        <p onClick={(e) => {e.stopPropagation(); setViewModalType('videos')}} style={{ cursor: 'pointer', textAlign: 'center' }}>عرض الدروس ({filteredVideos.length})</p>
+                      <div className={styles.cardItemActions}>
+                        <p onClick={(e) => {e.stopPropagation(); setAddModalType('video')}}>إضافة درس</p>
+                        <p onClick={(e) => {e.stopPropagation(); setViewModalType('videos')}}>عرض الدروس ({filteredVideos.length})</p>
                       </div>
                     </div>
                   )}
 
                   {/* Notifications card */}
-                  <div  style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', cursor: 'pointer' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px' }}>
-                      <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px' }}>التنبيهات</h4>
-                      <img src="../src/svg/notification.svg" alt="" style={{ width: '28px', height: '28px' }} />
+                  <div className={styles.cardItem}>
+                    <div className={styles.cardItemContent}>
+                      <h4>التنبيهات</h4>
+                      <img src="../src/svg/notification.svg" alt="" />
                     </div>
-                    <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                          <p onClick={() => openNotifModal({ openTab: 'messages' })} style={{ margin: 0, textAlign: 'right', cursor: 'pointer' }}> الرسايل {unreadMessagesCount > 0 ? `(${unreadMessagesCount})` : ''}</p>
-                          <p onClick={() => openNotifModal({ openTab: 'notifications', onlyForCurrentUser: true })} style={{ margin: 0, textAlign: 'right', cursor: 'pointer' }}> التنبيهات {unreadNotificationsCount > 0 ? `(${unreadNotificationsCount})` : ''}</p>
-                        </div>
+                    <div className={styles.cardItemActions}>
+                      <p onClick={() => openNotifModal({ openTab: 'messages' })}>الرسايل {unreadMessagesCount > 0 ? `(${unreadMessagesCount})` : ''}</p>
+                      <p onClick={() => openNotifModal({ openTab: 'notifications', onlyForCurrentUser: true })}>التنبيهات {unreadNotificationsCount > 0 ? `(${unreadNotificationsCount})` : ''}</p>
+                    </div>
                   </div>
 
-                  {/* Department courses management card */}
-                  <div style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', cursor: 'pointer' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px' }}>
-                      <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px' }}>ادارة مقررات الدراسية</h4>
-                      <img src="../src/svg/book.svg" alt="" style={{ width: '28px', height: '28px' }} />
+                  {/* Graduation projects card (admin) */}
+                  {user.role === 'admin' && (
+                    <div className={styles.cardItem}>
+                      <div className={styles.cardItemContent}>
+                        <h4>مشاريع التخرج</h4>
+                        <img src="../src/svg/file.svg" alt="" />
+                      </div>
+                      <div className={styles.cardItemActions}>
+                        <p onClick={(e) => { e.stopPropagation(); setShowGradModal(true); }}>رفع مشروع جديد</p>
+                        <p onClick={(e) => { e.stopPropagation(); setViewModalType('graduation_projects'); }}>عرض مشاريع سابق ({graduationProjects.length})</p>
+                      </div>
                     </div>
-                    <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                      <p onClick={(e) => { e.stopPropagation(); setShowDeptSubjectsModal(true); }} style={{ margin: 0, textAlign: 'right', cursor: 'pointer' }}>عرض المواد التابعه للقسم</p>
-                      <p onClick={(e) => { e.stopPropagation(); setShowAddSubjectModal(true); }} style={{ margin: 0, textAlign: 'right', cursor: 'pointer' }}>اضافة مادة جديدة</p>
+                  )}
+
+                  {/* Department courses management card */}
+                  <div className={styles.cardItem}>
+                    <div className={styles.cardItemContent}>
+                      <h4>ادارة مقررات الدراسية</h4>
+                      <img src="../src/svg/book.svg" alt="" />
+                    </div>
+                    <div className={styles.cardItemActions}>
+                      <p onClick={(e) => { e.stopPropagation(); setShowDeptSubjectsModal(true); }}>عرض المواد التابعه للقسم</p>
+                      <p onClick={(e) => { e.stopPropagation(); setShowAddSubjectModal(true); }}>اضافة مادة جديدة</p>
+                    </div>
+                  </div>
+
+                  {/* Library card */}
+                  <div className={styles.cardItem}>
+                    <div className={styles.cardItemContent}>
+                      <h4>المكتبة</h4>
+                      <img src="../src/svg/book.svg" alt="" />
+                    </div>
+                    <div className={styles.cardItemActions}>
+                      <p onClick={(e) => { e.stopPropagation(); setAddModalType('book'); }}>إضافة رابط الكتاب</p>
+                      <p onClick={(e) => { e.stopPropagation(); setViewModalType('library'); }}>عرض المكتبة ({books.length})</p>
                     </div>
                   </div>
 
@@ -825,14 +959,6 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                               </p>
                               {u.departmentId && <p className={styles.cardDesc}>القسم: {dept ? dept.name : 'غير محدد'}</p>}
                               <div className={styles.cardActions}>
-                                {u.role === 'department_manager' && (
-                                  <button 
-                                    onClick={() => router.push(`/deputy?deptId=${u.departmentId}`)}
-                                    className={styles.editBtn}
-                                  >
-                                    دخول إلى صفحة النايب
-                                  </button>
-                                )}
                                 <button 
                                   onClick={() => handleDeleteUser(u.id)}
                                   className={styles.deleteBtn}
@@ -1159,53 +1285,52 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                 {user.role === 'department_manager' ? (
                   <>
                     <h3>إدارة قسمك</h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px', marginBottom: '30px' }}>
+                    <div className={styles.cardGrid}>
                       {/* المواد */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                       
-                        <div style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', textAlign: 'right' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', marginBottom: '8px' }}>
-                            <img src="../src/svg/book.svg" alt="كتاب" style={{ width: '28px', height: '28px' }} />
-                            <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px', fontFamily: 'sans-serif' }}>المواد</h4>
-                          </div>
-                          <p style={{ fontSize: '15px', margin: 0, cursor: 'pointer', fontFamily: 'sans-serif' }} onClick={() => setAddModalType('subject')}>إضافة مادة</p>
-                          <p style={{ fontSize: '15px', margin: 0, cursor: 'pointer', fontFamily: 'sans-serif' }} onClick={() => setViewModalType('subjects')}>عرض المواد ({filteredSubjects.length})</p>
+                      <div className={styles.cardItem}>
+                        <div className={styles.cardItemContent}>
+                          <img src="../src/svg/book.svg" alt="كتاب" />
+                          <h4>المواد</h4>
+                        </div>
+                        <div className={styles.cardItemActions}>
+                          <p onClick={() => setAddModalType('subject')}>إضافة مادة</p>
+                          <p onClick={() => setViewModalType('subjects')}>عرض المواد ({filteredSubjects.length})</p>
                         </div>
                       </div>
 
                       {/* الدروس */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <div style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', textAlign: 'right' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', marginBottom: '8px' }}>
-                            <img src="../src/svg/video.svg" alt="فيديو" style={{ width: '28px', height: '28px' }} />
-                            <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px', fontFamily: 'sans-serif' }}>الدروس</h4>
-                          </div>
-                          <p style={{ fontSize: '15px', margin: 0, cursor: 'pointer', fontFamily: 'sans-serif' }} onClick={() => setAddModalType('video')}>إضافة درس</p>
-                          <p style={{ fontSize: '15px', margin: 0, cursor: 'pointer', fontFamily: 'sans-serif' }} onClick={() => setViewModalType('videos')}>عرض الدروس ({filteredVideos.length})</p>
+                      <div className={styles.cardItem}>
+                        <div className={styles.cardItemContent}>
+                          <img src="../src/svg/video.svg" alt="فيديو" />
+                          <h4>الدروس</h4>
+                        </div>
+                        <div className={styles.cardItemActions}>
+                          <p onClick={() => setAddModalType('video')}>إضافة درس</p>
+                          <p onClick={() => setViewModalType('videos')}>عرض الدروس ({filteredVideos.length})</p>
                         </div>
                       </div>
 
                       {/* الواجبات */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <div style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', textAlign: 'right' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', marginBottom: '8px' }}>
-                            <img src="../src/svg/assignment.svg" alt="واجب" style={{ width: '28px', height: '28px' }} />
-                            <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px', fontFamily: 'sans-serif' }}>الواجبات</h4>
-                          </div>
-                          <p style={{ fontSize: '15px', margin: 0, cursor: 'pointer', fontFamily: 'sans-serif' }} onClick={() => setAddModalType('assignment')}>إضافة واجب</p>
-                          <p style={{ fontSize: '15px', margin: 0, cursor: 'pointer', fontFamily: 'sans-serif' }} onClick={() => setViewModalType('assignments')}>عرض الواجبات ({assignments?.length || 0})</p>
+                      <div className={styles.cardItem}>
+                        <div className={styles.cardItemContent}>
+                          <img src="../src/svg/assignment.svg" alt="واجب" />
+                          <h4>الواجبات</h4>
+                        </div>
+                        <div className={styles.cardItemActions}>
+                          <p onClick={() => setAddModalType('assignment')}>إضافة واجب</p>
+                          <p onClick={() => setViewModalType('assignments')}>عرض الواجبات ({assignments?.length || 0})</p>
                         </div>
                       </div>
 
                       {/* إضافة الطلاب */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <div style={{ border: '1px solid #000', padding: '14px', borderRadius: '10px', textAlign: 'right' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', marginBottom: '8px' }}>
-                            <img src="../src/svg/student.svg" alt="طالب" style={{ width: '28px', height: '28px' }} />
-                            <h4 style={{ margin: 0, textAlign: 'right', fontSize: '20px', fontFamily: 'sans-serif' }}>إضافة الطلاب</h4>
-                          </div>
-                          <p style={{ fontSize: '15px', margin: 0, cursor: 'pointer', fontFamily: 'sans-serif' }} onClick={() => setAddModalType('student')}>إضافة طالب</p>
-                          <p style={{ fontSize: '15px', margin: 0, cursor: 'pointer', fontFamily: 'sans-serif', textAlign: 'right' }} onClick={() => setViewModalType('students')}>عرض الطلاب ({filteredStudents.length})</p>
+                      <div className={styles.cardItem}>
+                        <div className={styles.cardItemContent}>
+                          <img src="../src/svg/student.svg" alt="طالب" />
+                          <h4>إضافة الطلاب</h4>
+                        </div>
+                        <div className={styles.cardItemActions}>
+                          <p onClick={() => setAddModalType('student')}>إضافة طالب</p>
+                          <p onClick={() => setViewModalType('students')}>عرض الطلاب ({filteredStudents.length})</p>
                         </div>
                       </div>
                     </div>
@@ -1272,6 +1397,40 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             )}
             {addModalType === 'department' && (
               <AddDepartmentForm onAdd={(name, description) => { handleAddDept(name, description); setAddModalType(null); }} />
+            )}
+            {addModalType === 'book' && (
+              <div>
+                <h3>إضافة رابط كتاب</h3>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  const formData = new FormData(e.target as HTMLFormElement);
+                  const title = formData.get('title') as string;
+                  const url = formData.get('url') as string;
+                  const departmentId = formData.get('departmentId') as string;
+                  if (title && url && departmentId) {
+                    handleAddBook(title, url, departmentId);
+                    setAddModalType(null);
+                  }
+                }}>
+                  <div style={{ marginBottom: '10px' }}>
+                    <label>عنوان الكتاب</label>
+                    <input name="title" type="text" required style={{ width: '100%', padding: '8px', marginTop: '5px' }} />
+                  </div>
+                  <div style={{ marginBottom: '10px' }}>
+                    <label>الرابط</label>
+                    <input name="url" type="url" required style={{ width: '100%', padding: '8px', marginTop: '5px' }} />
+                  </div>
+                  <div style={{ marginBottom: '10px' }}>
+                    <label>القسم</label>
+                    <select name="departmentId" required style={{ width: '100%', padding: '8px', marginTop: '5px' }}>
+                      {departments.map(dept => (
+                        <option key={dept.id} value={dept.id}>{dept.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button type="submit" style={{ padding: '10px 20px', background: '#007bff', color: 'white', border: 'none', borderRadius: '5px' }}>إضافة</button>
+                </form>
+              </div>
             )}
             {addModalType === 'student' && (
               <AddUserForm
@@ -1447,7 +1606,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
           <div style={{ background: 'white', padding: '20px', maxWidth: '800px', width: '90%', maxHeight: '80vh', overflow: 'auto', borderRadius: 8, position: 'relative', direction: 'rtl' }}>
             <button onClick={() => setViewModalType(null)} style={{ position: 'absolute', left: 8, top: 8, fontSize: 20, border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
             <h2 style={{ marginTop: 0, marginBottom: 16 }}>
-              {viewModalType === 'subjects' ? 'المواد الدراسية' : viewModalType === 'videos' ? 'الدروس التعليمية' : viewModalType === 'assignments' ? 'الواجبات' : viewModalType === 'departments' ? 'الأقسام الدراسية' : viewModalType === 'teachers' ? 'مديري القسم' : viewModalType === 'users' ? 'المستخدمين' : 'الطلاب'}
+              {viewModalType === 'subjects' ? 'المواد الدراسية' : viewModalType === 'videos' ? 'الدروس التعليمية' : viewModalType === 'assignments' ? 'الواجبات' : viewModalType === 'departments' ? 'الأقسام الدراسية' : viewModalType === 'teachers' ? 'مديري القسم' : viewModalType === 'users' ? 'المستخدمين' : viewModalType === 'library' ? 'المكتبة' : 'الطلاب'}
             </h2>
             {viewModalType === 'subjects' && (
               <div>
@@ -1499,6 +1658,62 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+            {viewModalType === 'graduation_projects' && (
+              <div>
+                <div style={{ marginBottom: 12 }}>
+                  <input
+                    placeholder="ابحث عن مشروع..."
+                    value={gradSearchTerm}
+                    onChange={(e) => setGradSearchTerm(e.target.value)}
+                    style={{ padding: '8px', border: '1px solid #ccc', borderRadius: 6, width: '100%' }}
+                  />
+                </div>
+
+                {(() => {
+                  const q = (gradSearchTerm || '').trim().toLowerCase();
+                  const filtered = graduationProjects.filter((p: any) => {
+                    const name = (p.name || p.originalName || '').toString().toLowerCase();
+                    const deptName = (departments.find((d: any) => d.id === p.departmentId)?.name || '').toString().toLowerCase();
+                    return q === '' || name.includes(q) || deptName.includes(q);
+                  });
+
+                  if (filtered.length === 0) return <p>لا توجد مشاريع تخرج</p>;
+
+                  return (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '12px' }}>
+                      {filtered.map((p: any) => (
+                        <div key={p.id} style={{ border: '1px solid #000', padding: 10, borderRadius: 8 }}>
+                          <h5 style={{ margin: '0 0 8px 0' }}>{p.name}</h5>
+                          <p style={{ fontSize: 12, color: '#666', margin: '0 0 8px 0' }}>تم الرفع: {p.uploadedAt ? new Date(p.uploadedAt).toLocaleString() : ''}</p>
+                          <p style={{ fontSize: 12, color: '#666', margin: '0 0 8px 0' }}>القسم: {departments.find((d: any) => d.id === p.departmentId)?.name || 'عام'}</p>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <a href={p.url} target="_blank" rel="noreferrer" style={{ padding: '6px 10px', background: '#1976d2', color: 'white', borderRadius: 4, textDecoration: 'none' }}>تحميل / عرض</a>
+                            {user.role === 'admin' && (
+                              <button onClick={async () => {
+                                if (!confirm('هل تريد حذف هذا المشروع؟')) return;
+                                try {
+                                  const res = await fetch(`/api/graduation_projects?id=${encodeURIComponent(p.id)}`, { method: 'DELETE' });
+                                  if (res.ok) {
+                                    setGraduationProjects(prev => prev.filter(pr => pr.id !== p.id));
+                                    showToast('تم حذف المشروع', 'success');
+                                  } else {
+                                    const txt = await res.text().catch(() => 'فشل الحذف');
+                                    showToast(txt || 'فشل الحذف', 'error');
+                                  }
+                                } catch (e) {
+                                  console.error(e);
+                                  showToast('فشل الحذف', 'error');
+                                }
+                              }} style={{ padding: '6px 10px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}>حذف</button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             )}
             {viewModalType === 'assignments' && (
@@ -1562,6 +1777,34 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                           <p style={{ color: '#666', fontSize: '12px', margin: '0 0 5px 0' }}>المستخدم: {student.id}</p>
                           {student.departmentId && <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>القسم: {dept ? dept.name : 'غير محدد'}</p>}
                           <button onClick={() => handleDeleteUser(student.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+            {viewModalType === 'library' && (
+              <div>
+                {books.length === 0 ? (
+                  <p>لا توجد كتب</p>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+                    {books.map(book => {
+                      const dept = departments.find(d => d.id === book.departmentId);
+                      return (
+                        <div key={book.id} style={{
+                          border: '1px solid #000',
+                          padding: '10px',
+                          borderRadius: '8px',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                        }}>
+                          <h5 style={{ margin: '0 0 8px 0' }}>{book.title}</h5>
+                          <p style={{ color: '#666', fontSize: '12px', margin: '0 0 5px 0' }}>القسم: {dept ? dept.name : 'غير محدد'}</p>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button onClick={() => window.open(book.url, '_blank')} style={{ padding: '4px 8px', fontSize: '12px', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px' }}>فتح الرابط</button>
+                            <button onClick={() => handleDeleteBook(book.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
+                          </div>
                         </div>
                       );
                     })}
@@ -1763,6 +2006,35 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                 })()}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {showGradModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 100000 }}>
+          <div style={{ background: 'white', padding: '18px', marginTop: '40px', maxWidth: '640px', width: '95%', borderRadius: 8, position: 'relative', direction: 'rtl' }}>
+            <button onClick={() => setShowGradModal(false)} style={{ position: 'absolute', left: 8, top: 8, fontSize: 20, border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
+            <h2 style={{ marginTop: 0 }}>رفع مشروع تخرج</h2>
+            <p style={{ marginTop: 0, color: '#666' }}>اختر ملف PDF لرفعه على المنصة. فقط ملفات PDF مدعومة.</p>
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <input placeholder="عنوان المشروع" value={gradTitle} onChange={(e) => setGradTitle(e.target.value)} style={{ padding: '8px', borderRadius: 6, border: '1px solid #ccc' }} />
+              <div>
+                <label style={{ marginRight: 8 }}>القسم:</label>
+                <select value={gradDeptId || ''} onChange={(e) => setGradDeptId(e.target.value || null)} style={{ padding: '8px', borderRadius: 6, border: '1px solid #ccc' }}>
+                  <option value="">-- اختر القسم --</option>
+                  {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: '#f0f0f0', borderRadius: 6, cursor: 'pointer', border: '1px solid #ccc' }}>
+                  اختيار الملف
+                  <input type="file" accept="application/pdf" onChange={(e) => setGradFile(e.target.files ? e.target.files[0] : null)} style={{ display: 'none' }} />
+                </label>
+                <span style={{ fontSize: 13, color: '#333', minWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{gradFile ? gradFile.name : 'لم يتم اختيار ملف'}</span>
+                <button onClick={handleUploadGraduationProject} disabled={uploadingGrad || !gradFile} style={{ padding: '8px 12px', background: uploadingGrad || !gradFile ? '#90caf9' : '#1976d2', color: 'white', border: 'none', borderRadius: 6, cursor: uploadingGrad || !gradFile ? 'not-allowed' : 'pointer' }}>{uploadingGrad ? 'جارٍ الرفع...' : 'رفع'}</button>
+                <button onClick={() => { setGradFile(null); setShowGradModal(false); setGradTitle(''); setGradDeptId(null); }} style={{ padding: '8px 12px', borderRadius: 6 }}>إلغاء</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
