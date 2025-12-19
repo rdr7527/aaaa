@@ -125,7 +125,7 @@ export default function DepartmentPage() {
     return (
       <div className={styles.container}>
         <nav className={styles.navbar}>
-          <img src="../src/sh.png" alt="الشعار" style={{ width: '50px', height: '50px', objectFit: 'contain' }} />
+          <img src="../src/sh.png" alt="الشعار" className="appLogo" />
           <button onClick={logout} className={styles.logoutBtn}>تسجيل الخروج</button>
         </nav>
         <div className={styles.main}>
@@ -140,7 +140,7 @@ export default function DepartmentPage() {
       <nav className={styles.navbar}>
         <div className={styles.navContent}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <img src="../src/sh.png" alt="الشعار" style={{ width: '50px', height: '50px', objectFit: 'contain' }} />
+            <img src="../src/sh.png" alt="الشعار" className="appLogo" />
             <p className={styles.deptTitle}>منارة المعرفة </p>
           </div>
           <div className={styles.userMenu}>
