@@ -42,7 +42,7 @@ export default function LoginPage() {
     <div className={styles.container}>
       <div className={styles.card}>
         <div className={styles.header}>
-          <img src="../src/sh.png" alt="الشعار" style={{ width: '80px', height: '80px', objectFit: 'contain' }} />
+          <img src="../src/login.png" alt="الشعار" className="login-logo" />
           <p>تسجيل الدخول</p>
         </div>
 
