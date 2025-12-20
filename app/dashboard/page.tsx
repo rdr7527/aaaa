@@ -701,9 +701,9 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       setUploadingGrad(false);
     }
   };
-  const [addModalType, setAddModalType] = useState<'subject' | 'video' | 'assignment' | 'student' | 'department' | 'teacher' | null>(null);
+  const [addModalType, setAddModalType] = useState<'subject' | 'video' | 'assignment' | 'student' | 'department' | 'teacher' | 'book' | null>(null);
 
-  const [viewModalType, setViewModalType] = useState<'subjects' | 'videos' | 'assignments' | 'students' | 'departments' | 'teachers' | 'users' | 'deptSubjects' | 'graduation_projects' | null>(null);
+  const [viewModalType, setViewModalType] = useState<'subjects' | 'videos' | 'assignments' | 'students' | 'departments' | 'teachers' | 'users' | 'deptSubjects' | 'graduation_projects' | 'library' | null>(null);
 
   function getYoutubeEmbedUrl(url: string): string | null {
     try {
