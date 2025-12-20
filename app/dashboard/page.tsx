@@ -30,6 +30,8 @@ export default function Dashboard() {
   const [modalUserFilter, setModalUserFilter] = useState('all');
   const [modalDeptSearchTerm, setModalDeptSearchTerm] = useState('');
   const [modalLibrarySearchTerm, setModalLibrarySearchTerm] = useState('');
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [editUserModal, setEditUserModal] = useState(false);
   const deptListRef = React.useRef<HTMLDivElement | null>(null);
   const router = useRouter();
 
@@ -42,6 +44,8 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
           if (res.status === 200) {
           const data = await res.json();
           setUser(data.user);
+          // Refresh notification counts after user is set
+          setTimeout(() => refreshNotifCounts(), 100);
           // Keep teachers on the dashboard
           // For other department users (students) keep existing behavior and send to /department
           // Department managtment managers go to deputy
@@ -580,17 +584,21 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   const [showDeptSubjectsModal, setShowDeptSubjectsModal] = useState(false);
   const [showAddSubjectModal, setShowAddSubjectModal] = useState(false);
 
-  const refreshNotifCounts = () => {
+  const refreshNotifCounts = async () => {
     try {
-      const rawMsgs = typeof window !== 'undefined' ? localStorage.getItem('app_messages') || '[]' : '[]';
-      const rawNot = typeof window !== 'undefined' ? localStorage.getItem('app_notifications') || '[]' : '[]';
-      const msgs = JSON.parse(rawMsgs) || [];
-      const nots = JSON.parse(rawNot) || [];
+      const msgsRes = await fetch('/api/messages');
+      const msgsData = msgsRes.ok ? await msgsRes.json() : { messages: [] };
+      const msgs = msgsData.messages || [];
+
+      const notsRes = await fetch('/api/notifications');
+      const notsData = notsRes.ok ? await notsRes.json() : { notifications: [] };
+      const nots = notsData.notifications || [];
+
       const readKey = `app_messages_read_${user?.id || ''}`;
       const rawRead = typeof window !== 'undefined' ? localStorage.getItem(readKey) || '[]' : '[]';
       const readIds = JSON.parse(rawRead) || [];
-      const unreadMsgs = Array.isArray(msgs) ? msgs.filter((m: any) => !readIds.includes(m.id)).length : 0;
-      const unreadNots = Array.isArray(nots) ? nots.filter((n: any) => String(n.to) === String(user?.id || '') && !n.read).length : 0;
+      const unreadMsgs = Array.isArray(nots) ? nots.filter((n: any) => n.to === 'all' && n.from !== user?.id && !readIds.includes(n.id)).length : 0;
+      const unreadNots = Array.isArray(nots) ? nots.filter((n: any) => (n.to === 'all' || n.to === user?.id) && n.from !== user?.id && !n.read).length : 0;
       setUnreadMessagesCount(unreadMsgs);
       setUnreadNotificationsCount(unreadNots);
     } catch (e) {
@@ -599,37 +607,49 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     }
   };
 
-  const openNotifModal = (opts?: { openTab?: 'send' | 'messages' | 'notifications'; onlyForCurrentUser?: boolean }) => {
+  const openNotifModal = async (opts?: { openTab?: 'send' | 'messages' | 'notifications'; onlyForCurrentUser?: boolean }) => {
     try {
-      const rawMsgs = typeof window !== 'undefined' ? localStorage.getItem('app_messages') || '[]' : '[]';
-      const rawNot = typeof window !== 'undefined' ? localStorage.getItem('app_notifications') || '[]' : '[]';
-      const msgs = JSON.parse(rawMsgs);
-      const nots = JSON.parse(rawNot);
+      const msgsRes = await fetch('/api/messages');
+      const msgsData = msgsRes.ok ? await msgsRes.json() : { messages: [] };
+      const msgs = msgsData.messages || [];
+
+      const notsRes = await fetch('/api/notifications');
+      const notsData = notsRes.ok ? await notsRes.json() : { notifications: [] };
+      const nots = notsData.notifications || [];
+
       // If opening messages from dashboard, show unread messages only for current user
       try {
         const readKey = `app_messages_read_${user?.id || ''}`;
         const rawRead = typeof window !== 'undefined' ? localStorage.getItem(readKey) || '[]' : '[]';
         const readIds = JSON.parse(rawRead) || [];
         if (opts?.openTab === 'messages') {
-          setSentMessages(Array.isArray(msgs) ? msgs.filter((m: any) => !readIds.includes(m.id)) : []);
-          // mark them as read for this user
-          const idsToMark = Array.isArray(msgs) ? msgs.filter((m: any) => !readIds.includes(m.id)).map((m: any) => m.id) : [];
+          const filteredMsgs = Array.isArray(nots) ? nots.filter((n: any) => n.to === 'all') : [];
+          setSentMessages(filteredMsgs);
+          // mark them as read for this user (only those not sent by the user)
+          const idsToMark = filteredMsgs.filter((n: any) => n.from !== user?.id).map((n: any) => n.id);
           const newRead = Array.isArray(readIds) ? Array.from(new Set([...readIds, ...idsToMark])) : idsToMark;
           if (typeof window !== 'undefined') localStorage.setItem(readKey, JSON.stringify(newRead));
         } else {
-          setSentMessages(Array.isArray(msgs) ? msgs : []);
+          setSentMessages(Array.isArray(nots) ? nots.filter((n: any) => n.to === 'all') : []);
         }
       } catch (e) {
         setSentMessages(Array.isArray(msgs) ? msgs : []);
       }
 
       if (opts?.openTab === 'notifications' && opts?.onlyForCurrentUser) {
-        const filtered = Array.isArray(nots) ? nots.filter((n: any) => String(n.to) === String(user?.id || '')) : [];
+        const filtered = Array.isArray(nots) ? nots.filter((n: any) => (n.to === 'all' || n.to === user?.id) && n.from !== user?.id) : [];
         // mark those notifications as read
         try {
-          const allNots = Array.isArray(nots) ? nots : [];
-          allNots.forEach((n: any) => { if (String(n.to) === String(user?.id || '')) n.read = true; });
-          if (typeof window !== 'undefined') localStorage.setItem('app_notifications', JSON.stringify(allNots));
+          for (const n of filtered) {
+            if (!n.read) {
+              await fetch('/api/notifications', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: n.id, read: true }),
+              });
+              n.read = true; // update local
+            }
+          }
         } catch (e) {}
         setSentNotifications(filtered);
       } else {
@@ -876,7 +896,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                     </div>
                     <div className={styles.cardItemActions}>
                       <p onClick={() => openNotifModal({ openTab: 'messages' })}>الرسايل {unreadMessagesCount > 0 ? `(${unreadMessagesCount})` : ''}</p>
-                      <p onClick={() => openNotifModal({ openTab: 'notifications', onlyForCurrentUser: true })}>التنبيهات {unreadNotificationsCount > 0 ? `(${unreadNotificationsCount})` : ''}</p>
+                      <p onClick={() => openNotifModal({ openTab: 'notifications' })}>التنبيهات {unreadMessagesCount > 0 ? `(${unreadMessagesCount})` : ''}</p>
                     </div>
                   </div>
 
@@ -1462,7 +1482,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
               <button onClick={() => setNotifView('send')} style={{ padding: '8px 12px', background: notifView === 'send' ? '#1976d2' : '#e0e0e0', color: notifView === 'send' ? 'white' : 'black', border: 'none', borderRadius: 6, cursor: 'pointer' }}>إرسال</button>
               <button onClick={() => { try { const rawMsgs = typeof window !== 'undefined' ? localStorage.getItem('app_messages') || '[]' : '[]'; setSentMessages(Array.isArray(JSON.parse(rawMsgs)) ? JSON.parse(rawMsgs) : []); } catch(e){ setSentMessages([]);} setNotifView('messages'); }} style={{ padding: '8px 12px', background: notifView === 'messages' ? '#1976d2' : '#e0e0e0', color: notifView === 'messages' ? 'white' : 'black', border: 'none', borderRadius: 6, cursor: 'pointer' }}>الرسائل المرسلة</button>
-              <button onClick={() => { try { const rawNot = typeof window !== 'undefined' ? localStorage.getItem('app_notifications') || '[]' : '[]'; setSentNotifications(Array.isArray(JSON.parse(rawNot)) ? JSON.parse(rawNot) : []); } catch(e){ setSentNotifications([]);} setNotifView('notifications'); }} style={{ padding: '8px 12px', background: notifView === 'notifications' ? '#1976d2' : '#e0e0e0', color: notifView === 'notifications' ? 'white' : 'black', border: 'none', borderRadius: 6, cursor: 'pointer' }}>التنبيهات المرسلة</button>
+              <button onClick={async () => { try { const res = await fetch('/api/notifications'); const data = await res.json(); setSentNotifications(data.notifications || []); } catch(e){ setSentNotifications([]);} setNotifView('notifications'); }} style={{ padding: '8px 12px', background: notifView === 'notifications' ? '#1976d2' : '#e0e0e0', color: notifView === 'notifications' ? 'white' : 'black', border: 'none', borderRadius: 6, cursor: 'pointer' }}>التنبيهات المرسلة</button>
 
             </div>
 
@@ -1501,51 +1521,55 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
                 <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-start' }}>
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       if (!notifMessage.trim()) { showToast('اكتب نص الرسالة', 'error'); return; }
                       try {
                         if (notifMode === 'notification') {
                           if (!notifRecipient) { showToast('اختر مستخدم للتنبيه', 'error'); return; }
                           const notif = {
-                            id: Date.now().toString(),
                             to: notifRecipient,
                             from: user?.id || 'system',
                             fromName: user?.name || user?.id || 'مستخدم',
                             message: notifMessage.trim(),
-                            date: new Date().toISOString(),
                           };
-                          const raw = localStorage.getItem('app_notifications') || '[]';
-                          const arr = JSON.parse(raw);
-                          if (!Array.isArray(arr)) arr.length = 0;
-                          arr.unshift(notif);
-                          localStorage.setItem('app_notifications', JSON.stringify(arr));
-                          setSentNotifications(prev => [notif, ...prev]);
+                          const res = await fetch('/api/notifications', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(notif),
+                          });
+                          if (res.ok) {
+                            const data = await res.json();
+                            setSentNotifications(prev => [data.notification, ...prev]);
+                          } else {
+                            throw new Error('Failed to send notification');
+                          }
                         } else {
-                          const msg = {
-                            id: Date.now().toString(),
+                          const notif = {
                             to: notifTarget,
                             from: user?.id || 'system',
                             fromName: user?.name || user?.id || 'مستخدم',
                             message: notifMessage.trim(),
-                            date: new Date().toISOString(),
                           };
-                          const raw = localStorage.getItem('app_messages') || '[]';
-                          const arr = JSON.parse(raw);
-                          if (!Array.isArray(arr)) arr.length = 0;
-                          arr.unshift(msg);
-                          localStorage.setItem('app_messages', JSON.stringify(arr));
-                          setSentMessages(prev => [msg, ...prev]);
-                          // refresh counts and mark this message as unread for current user
-                          try {
-                            // small delay to ensure storage is written
-                            setTimeout(() => {
-                              try { refreshNotifCounts(); } catch (e) {}
-                              setUnreadMessagesCount(prev => (typeof prev === 'number' ? prev + 1 : 1));
-                            }, 30);
-                          } catch (e) {}
+                          const res = await fetch('/api/notifications', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(notif),
+                          });
+                          if (res.ok) {
+                            const data = await res.json();
+                            setSentMessages(prev => [data.notification, ...prev]);
+                            // refresh counts
+                            try {
+                              setTimeout(() => {
+                                refreshNotifCounts();
+                              }, 30);
+                            } catch (e) {}
+                          } else {
+                            throw new Error('Failed to send message');
+                          }
                         }
                         showToast('تم الإرسال', 'success');
-                        try { refreshNotifCounts(); } catch (e) {}
+                        refreshNotifCounts();
                         setNotifMessage('');
                         setNotifTarget('all');
                         setNotifRecipient('');
@@ -1927,8 +1951,9 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                               {u.departmentId && <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>القسم: {dept ? dept.name : 'غير محدد'}</p>}
                               <div style={{ display: 'flex', gap: '6px' }}>
                                 <button onClick={() => {
-                                  const newName = prompt('الاسم الجديد:', u.name || u.id);
-                                  if (newName) handleUpdateTeacher(u.id, { name: newName });
+                                  setEditingUser({ ...u, originalId: u.id });
+                                  setEditUserModal(true);
+                                  setViewModalType(null);
                                 }} style={{ padding: '4px 8px', fontSize: '12px' }}>تعديل</button>
                                 <button onClick={() => handleDeleteUser(u.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
                               </div>
@@ -2098,6 +2123,60 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
               })()}
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {editUserModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999 }}>
+          <div style={{ background: 'white', padding: '20px', maxWidth: '500px', width: '90%', borderRadius: 8, position: 'relative', direction: 'rtl' }}>
+            <button onClick={() => { setEditUserModal(false); setViewModalType('users'); }} style={{ position: 'absolute', left: 8, top: 8, fontSize: 20, border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
+            <h2 style={{ marginTop: 0, marginBottom: 12 }}>تعديل المستخدم</h2>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              const updates: any = {};
+              if (editingUser.name !== undefined) updates.name = editingUser.name;
+              if (editingUser.password) updates.password = editingUser.password;
+              if (editingUser.id !== editingUser.originalId) updates.newId = editingUser.id;
+              await handleUpdateTeacher(editingUser.originalId || editingUser.id, updates);
+              setEditUserModal(false);
+              setEditingUser(null);
+              setViewModalType('users');
+            }}>
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ display: 'block', marginBottom: 5 }}>الاسم:</label>
+                <input
+                  type="text"
+                  value={editingUser.name || ''}
+                  onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
+                  style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
+                  required
+                />
+              </div>
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ display: 'block', marginBottom: 5 }}>كلمة المرور:</label>
+                <input
+                  type="password"
+                  value={editingUser.password || ''}
+                  onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })}
+                  style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
+                />
+              </div>
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ display: 'block', marginBottom: 5 }}>اليوزر (اسم المستخدم):</label>
+                <input
+                  type="text"
+                  value={editingUser.id || ''}
+                  onChange={(e) => setEditingUser({ ...editingUser, id: e.target.value })}
+                  style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
+                  required
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => { setEditUserModal(false); setViewModalType('users'); }} style={{ padding: '8px 16px', border: '1px solid #ccc', background: 'white', borderRadius: '4px', cursor: 'pointer' }}>إلغاء</button>
+                <button type="submit" style={{ padding: '8px 16px', background: '#1565c0', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>حفظ</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

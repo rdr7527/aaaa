@@ -104,6 +104,13 @@ export async function PUT(req: Request) {
   const user = (data.users || []).find((u: any) => u.id === body.id);
   if (!user) return NextResponse.json({ ok: false, error: 'User not found' }, { status: 404 });
   
+  if (body.newId && body.newId !== body.id) {
+    if ((data.users || []).find((u: any) => u.id === body.newId)) {
+      return NextResponse.json({ ok: false, error: 'New username already exists' }, { status: 400 });
+    }
+    user.id = body.newId;
+  }
+  
   if (body.name) user.name = body.name;
   if (body.role) user.role = body.role;
   if (body.departmentId !== undefined) user.departmentId = body.departmentId;
