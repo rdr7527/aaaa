@@ -29,6 +29,7 @@ export default function Dashboard() {
   const [modalUserSearchTerm, setModalUserSearchTerm] = useState('');
   const [modalUserFilter, setModalUserFilter] = useState('all');
   const [modalDeptSearchTerm, setModalDeptSearchTerm] = useState('');
+  const [modalLibrarySearchTerm, setModalLibrarySearchTerm] = useState('');
   const deptListRef = React.useRef<HTMLDivElement | null>(null);
   const router = useRouter();
 
@@ -97,6 +98,13 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
           setSubjects(subjData.subjects || []);
         }
 
+        // also load library for admin so added books persist after reload
+        const libResAdmin = await fetch('/api/library');
+        if (libResAdmin.ok) {
+          const libData = await libResAdmin.json();
+          setBooks(libData || []);
+        }
+
         setVideos([]);
         return;
       }
@@ -126,7 +134,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   const loadDepartmentData = async (deptId: string) => {
     if (!deptId) return;
     try {
-      const res = await fetch(`/api/departments?id=${deptId}`);
+      const res = await fetch(`/api/departments?id=${deptId}`, { cache: 'no-store' });
       if (!res.ok) {
         console.error('فشل جلب القسم');
         setDepartments([]);
@@ -154,7 +162,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       setVideos(deptVideos);
       // try load assignments for this department
       try {
-        const ares = await fetch(`/api/assignments?departmentId=${deptId}`);
+        const ares = await fetch(`/api/assignments?departmentId=${deptId}`, { cache: 'no-store' });
         if (ares.ok) {
           const abody = await ares.json();
           setAssignments(abody.assignments || []);
@@ -164,7 +172,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       }
       // load users for this department (for department managers)
       try {
-        const ures = await fetch('/api/admin/users');
+        const ures = await fetch('/api/admin/users', { cache: 'no-store' });
         if (ures.ok) {
           const ubody = await ures.json();
           setUsers(ubody.users || []);
@@ -378,9 +386,17 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       const res = await fetch('/api/subjects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ name, description, departmentId, teacherId }),
       });
-      if (res.ok) loadData();
+      if (res.ok) {
+        // If current user is tied to a department, refresh that department's data
+        if (user?.departmentId) {
+          try { await loadDepartmentData(user.departmentId); } catch (e) { await loadData(); }
+        } else {
+          await loadData();
+        }
+      }
     } catch (e) {
       console.error(e);
     }
@@ -574,7 +590,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       const rawRead = typeof window !== 'undefined' ? localStorage.getItem(readKey) || '[]' : '[]';
       const readIds = JSON.parse(rawRead) || [];
       const unreadMsgs = Array.isArray(msgs) ? msgs.filter((m: any) => !readIds.includes(m.id)).length : 0;
-      const unreadNots = Array.isArray(nots) ? nots.filter((n: any) => n.to === (user?.id || '') && !n.read).length : 0;
+      const unreadNots = Array.isArray(nots) ? nots.filter((n: any) => String(n.to) === String(user?.id || '') && !n.read).length : 0;
       setUnreadMessagesCount(unreadMsgs);
       setUnreadNotificationsCount(unreadNots);
     } catch (e) {
@@ -608,11 +624,11 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       }
 
       if (opts?.openTab === 'notifications' && opts?.onlyForCurrentUser) {
-        const filtered = Array.isArray(nots) ? nots.filter((n: any) => n.to === (user?.id || '')) : [];
+        const filtered = Array.isArray(nots) ? nots.filter((n: any) => String(n.to) === String(user?.id || '')) : [];
         // mark those notifications as read
         try {
           const allNots = Array.isArray(nots) ? nots : [];
-          allNots.forEach((n: any) => { if (n.to === (user?.id || '')) n.read = true; });
+          allNots.forEach((n: any) => { if (String(n.to) === String(user?.id || '')) n.read = true; });
           if (typeof window !== 'undefined') localStorage.setItem('app_notifications', JSON.stringify(allNots));
         } catch (e) {}
         setSentNotifications(filtered);
@@ -806,8 +822,8 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                 <div className={styles.cardGrid}>
                   <div className={styles.cardItem} onClick={() => setActiveTab('departments')}>
                     <div className={styles.cardItemContent}>
-                      <h4>إدارة الأقسام</h4>
                       <img src="../src/svg/book.svg" alt="" />
+                      <h4>إدارة الأقسام</h4>
                     </div>
                     <div className={styles.cardItemActions}>
                       <p onClick={(e) => {e.stopPropagation(); setAddModalType('department')}}>إضافة قسم جديد</p>
@@ -817,8 +833,8 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                   {user.role === 'admin' && (
                     <div className={styles.cardItem}>
                       <div className={styles.cardItemContent}>
-                        <h4>إدارة المستخدمين</h4>
                         <img src="../src/svg/student.svg" alt="" />
+                        <h4>إدارة المستخدمين</h4>
                       </div>
                       <div className={styles.cardItemActions}>
                         <p onClick={(e) => {e.stopPropagation(); setAddModalType('student')}}>إضافة مستخدم جديد</p>
@@ -855,8 +871,8 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                   {/* Notifications card */}
                   <div className={styles.cardItem}>
                     <div className={styles.cardItemContent}>
-                      <h4>التنبيهات</h4>
                       <img src="../src/svg/notification.svg" alt="" />
+                      <h4>التنبيهات</h4>
                     </div>
                     <div className={styles.cardItemActions}>
                       <p onClick={() => openNotifModal({ openTab: 'messages' })}>الرسايل {unreadMessagesCount > 0 ? `(${unreadMessagesCount})` : ''}</p>
@@ -868,8 +884,8 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                   {user.role === 'admin' && (
                     <div className={styles.cardItem}>
                       <div className={styles.cardItemContent}>
-                        <h4>مشاريع التخرج</h4>
                         <img src="../src/svg/file.svg" alt="" />
+                        <h4>مشاريع التخرج</h4>
                       </div>
                       <div className={styles.cardItemActions}>
                         <p onClick={(e) => { e.stopPropagation(); setShowGradModal(true); }}>رفع مشروع جديد</p>
@@ -878,23 +894,13 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                     </div>
                   )}
 
-                  {/* Department courses management card */}
-                  <div className={styles.cardItem}>
-                    <div className={styles.cardItemContent}>
-                      <h4>ادارة مقررات الدراسية</h4>
-                      <img src="../src/svg/book.svg" alt="" />
-                    </div>
-                    <div className={styles.cardItemActions}>
-                      <p onClick={(e) => { e.stopPropagation(); setShowDeptSubjectsModal(true); }}>عرض المواد التابعه للقسم</p>
-                      <p onClick={(e) => { e.stopPropagation(); setShowAddSubjectModal(true); }}>اضافة مادة جديدة</p>
-                    </div>
-                  </div>
+                  {/* Department courses management card removed as requested */}
 
                   {/* Library card */}
                   <div className={styles.cardItem}>
                     <div className={styles.cardItemContent}>
-                      <h4>المكتبة</h4>
                       <img src="../src/svg/book.svg" alt="" />
+                      <h4>المكتبة</h4>
                     </div>
                     <div className={styles.cardItemActions}>
                       <p onClick={(e) => { e.stopPropagation(); setAddModalType('book'); }}>إضافة رابط الكتاب</p>
@@ -1529,6 +1535,14 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                           arr.unshift(msg);
                           localStorage.setItem('app_messages', JSON.stringify(arr));
                           setSentMessages(prev => [msg, ...prev]);
+                          // refresh counts and mark this message as unread for current user
+                          try {
+                            // small delay to ensure storage is written
+                            setTimeout(() => {
+                              try { refreshNotifCounts(); } catch (e) {}
+                              setUnreadMessagesCount(prev => (typeof prev === 'number' ? prev + 1 : 1));
+                            }, 30);
+                          } catch (e) {}
                         }
                         showToast('تم الإرسال', 'success');
                         try { refreshNotifCounts(); } catch (e) {}
@@ -1662,55 +1676,74 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             )}
             {viewModalType === 'graduation_projects' && (
               <div>
-                <div style={{ marginBottom: 12 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
                   <input
+                    type="text"
                     placeholder="ابحث عن مشروع..."
                     value={gradSearchTerm}
                     onChange={(e) => setGradSearchTerm(e.target.value)}
-                    style={{ padding: '8px', border: '1px solid #ccc', borderRadius: 6, width: '100%' }}
+                    className={styles.searchInput}
+                    style={{ width: '100%' }}
                   />
                 </div>
 
                 {(() => {
                   const q = (gradSearchTerm || '').trim().toLowerCase();
-                  const filtered = graduationProjects.filter((p: any) => {
+                  const list = graduationProjects.filter((p: any) => {
+                    if (!q) return true;
                     const name = (p.name || p.originalName || '').toString().toLowerCase();
                     const deptName = (departments.find((d: any) => d.id === p.departmentId)?.name || '').toString().toLowerCase();
-                    return q === '' || name.includes(q) || deptName.includes(q);
+                    return name.includes(q) || deptName.includes(q);
                   });
 
-                  if (filtered.length === 0) return <p>لا توجد مشاريع تخرج</p>;
+                  if (list.length === 0) return <p>لا توجد مشاريع تخرج</p>;
 
                   return (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '12px' }}>
-                      {filtered.map((p: any) => (
-                        <div key={p.id} style={{ border: '1px solid #000', padding: 10, borderRadius: 8 }}>
-                          <h5 style={{ margin: '0 0 8px 0' }}>{p.name}</h5>
-                          <p style={{ fontSize: 12, color: '#666', margin: '0 0 8px 0' }}>تم الرفع: {p.uploadedAt ? new Date(p.uploadedAt).toLocaleString() : ''}</p>
-                          <p style={{ fontSize: 12, color: '#666', margin: '0 0 8px 0' }}>القسم: {departments.find((d: any) => d.id === p.departmentId)?.name || 'عام'}</p>
-                          <div style={{ display: 'flex', gap: 8 }}>
-                            <a href={p.url} target="_blank" rel="noreferrer" style={{ padding: '6px 10px', background: '#1976d2', color: 'white', borderRadius: 4, textDecoration: 'none' }}>تحميل / عرض</a>
-                            {user.role === 'admin' && (
-                              <button onClick={async () => {
-                                if (!confirm('هل تريد حذف هذا المشروع؟')) return;
-                                try {
-                                  const res = await fetch(`/api/graduation_projects?id=${encodeURIComponent(p.id)}`, { method: 'DELETE' });
-                                  if (res.ok) {
-                                    setGraduationProjects(prev => prev.filter(pr => pr.id !== p.id));
-                                    showToast('تم حذف المشروع', 'success');
-                                  } else {
-                                    const txt = await res.text().catch(() => 'فشل الحذف');
-                                    showToast(txt || 'فشل الحذف', 'error');
+                    <div
+                      ref={deptListRef}
+                      className={styles.modalListContainer}
+                      onWheel={(e) => {
+                        const el = deptListRef.current;
+                        if (!el) return;
+                        el.scrollBy({ top: e.deltaY, behavior: 'auto' });
+                        e.preventDefault();
+                      }}
+                    >
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+                        {list.map((p: any) => (
+                          <div key={p.id} style={{
+                            border: '1px solid #000',
+                            padding: '10px',
+                            borderRadius: '8px',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                          }}>
+                            <h5 style={{ margin: '0 0 8px 0' }}>{p.name}</h5>
+                            <p style={{ fontSize: 12, color: '#666', margin: '0 0 6px 0' }}>تم الرفع: {p.uploadedAt ? new Date(p.uploadedAt).toLocaleString() : ''}</p>
+                            <p style={{ fontSize: 12, color: '#666', margin: '0 0 8px 0' }}>القسم: {departments.find((d: any) => d.id === p.departmentId)?.name || 'عام'}</p>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <a href={p.url} target="_blank" rel="noreferrer" style={{ padding: '6px 10px', background: '#1976d2', color: 'white', borderRadius: 4, textDecoration: 'none' }}>تحميل / عرض</a>
+                              {user.role === 'admin' && (
+                                <button onClick={async () => {
+                                  if (!confirm('هل تريد حذف هذا المشروع؟')) return;
+                                  try {
+                                    const res = await fetch(`/api/graduation_projects?id=${encodeURIComponent(p.id)}`, { method: 'DELETE' });
+                                    if (res.ok) {
+                                      setGraduationProjects(prev => prev.filter(pr => pr.id !== p.id));
+                                      showToast('تم حذف المشروع', 'success');
+                                    } else {
+                                      const txt = await res.text().catch(() => 'فشل الحذف');
+                                      showToast(txt || 'فشل الحذف', 'error');
+                                    }
+                                  } catch (e) {
+                                    console.error(e);
+                                    showToast('فشل الحذف', 'error');
                                   }
-                                } catch (e) {
-                                  console.error(e);
-                                  showToast('فشل الحذف', 'error');
-                                }
-                              }} style={{ padding: '6px 10px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}>حذف</button>
-                            )}
+                                }} style={{ padding: '6px 10px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}>حذف</button>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   );
                 })()}
@@ -1786,139 +1819,123 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             )}
             {viewModalType === 'library' && (
               <div>
-                {books.length === 0 ? (
-                  <p>لا توجد كتب</p>
-                ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
-                    {books.map(book => {
-                      const dept = departments.find(d => d.id === book.departmentId);
-                      return (
-                        <div key={book.id} style={{
-                          border: '1px solid #000',
-                          padding: '10px',
-                          borderRadius: '8px',
-                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                        }}>
-                          <h5 style={{ margin: '0 0 8px 0' }}>{book.title}</h5>
-                          <p style={{ color: '#666', fontSize: '12px', margin: '0 0 5px 0' }}>القسم: {dept ? dept.name : 'غير محدد'}</p>
-                          <div style={{ display: 'flex', gap: '8px' }}>
-                            <button onClick={() => window.open(book.url, '_blank')} style={{ padding: '4px 8px', fontSize: '12px', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px' }}>فتح الرابط</button>
-                            <button onClick={() => handleDeleteBook(book.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+                  <input
+                    type="text"
+                    placeholder="ابحث في المكتبة..."
+                    value={modalLibrarySearchTerm}
+                    onChange={(e) => setModalLibrarySearchTerm(e.target.value)}
+                    className={styles.searchInput}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                {(() => {
+                  const q = (modalLibrarySearchTerm || '').toLowerCase();
+                  const list = books.filter(b => {
+                    if (!q) return true;
+                    const title = (b.title || '').toString().toLowerCase();
+                    const deptName = (departments.find(d => d.id === b.departmentId)?.name || '').toString().toLowerCase();
+                    return title.includes(q) || deptName.includes(q);
+                  });
+
+                  if (list.length === 0) return <p>لا توجد كتب</p>;
+
+                  return (
+                    <div
+                      ref={deptListRef}
+                      className={styles.modalListContainer}
+                      onWheel={(e) => {
+                        const el = deptListRef.current;
+                        if (!el) return;
+                        el.scrollBy({ top: e.deltaY, behavior: 'auto' });
+                        e.preventDefault();
+                      }}
+                    >
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+                        {list.map(book => {
+                          const dept = departments.find(d => d.id === book.departmentId);
+                          return (
+                            <div key={book.id} style={{
+                              border: '1px solid #000',
+                              padding: '10px',
+                              borderRadius: '8px',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                            }}>
+                              <h5 style={{ margin: '0 0 8px 0' }}>{book.title}</h5>
+                              <p style={{ color: '#666', fontSize: '12px', margin: '0 0 5px 0' }}>القسم: {dept ? dept.name : 'غير محدد'}</p>
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                <button onClick={() => window.open(book.url, '_blank')} style={{ padding: '4px 8px', fontSize: '12px', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px' }}>فتح الرابط</button>
+                                <button onClick={() => handleDeleteBook(book.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
             {viewModalType === 'users' && (
               <div>
-                <div style={{ marginBottom: '20px' }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
                   <input
                     type="text"
                     placeholder="ابحث عن مستخدم..."
                     value={modalUserSearchTerm}
                     onChange={(e) => setModalUserSearchTerm(e.target.value)}
-                    style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px', width: '100%', maxWidth: '300px', marginBottom: '10px' }}
+                    className={styles.searchInput}
+                    style={{ width: '100%' }}
                   />
-                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                    <button 
-                      onClick={() => setModalUserFilter('all')}
-                      style={{
-                        padding: '6px 12px',
-                        background: modalUserFilter === 'all' ? '#1976d2' : '#e0e0e0',
-                        color: modalUserFilter === 'all' ? 'white' : 'black',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      الكل
-                    </button>
-                    <button 
-                      onClick={() => setModalUserFilter('user')}
-                      style={{
-                        padding: '6px 12px',
-                        background: modalUserFilter === 'user' ? '#1976d2' : '#e0e0e0',
-                        color: modalUserFilter === 'user' ? 'white' : 'black',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      الطلاب
-                    </button>
-                    <button 
-                      onClick={() => setModalUserFilter('department_manager')}
-                      style={{
-                        padding: '6px 12px',
-                        background: modalUserFilter === 'department_manager' ? '#1976d2' : '#e0e0e0',
-                        color: modalUserFilter === 'department_manager' ? 'white' : 'black',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      دكتور
-                    </button>
-                    <button 
-                      onClick={() => setModalUserFilter('teacher')}
-                      style={{
-                        padding: '6px 12px',
-                        background: modalUserFilter === 'teacher' ? '#1976d2' : '#e0e0e0',
-                        color: modalUserFilter === 'teacher' ? 'white' : 'black',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      مدير القسم
-                    </button>
-                    <button 
-                      onClick={() => setModalUserFilter('admin')}
-                      style={{
-                        padding: '6px 12px',
-                        background: modalUserFilter === 'admin' ? '#1976d2' : '#e0e0e0',
-                        color: modalUserFilter === 'admin' ? 'white' : 'black',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      مدير النظام
-                    </button>
-                  </div>
                 </div>
+
                 {(() => {
-                  const modalFilteredUsers = users.filter(u => 
-                    (u.id || '').includes(modalUserSearchTerm) || 
-                    (u.name || '').includes(modalUserSearchTerm) || 
-                    (u.role || '').includes(modalUserSearchTerm)
-                  ).filter(u => modalUserFilter === 'all' || u.role === modalUserFilter);
-                  return modalFilteredUsers.length === 0 ? (
-                    <p>لا يوجد مستخدمين</p>
-                  ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
-                      {modalFilteredUsers.map(u => {
-                        const dept = departments.find(d => d.id === u.departmentId);
-                        return (
-                          <div key={u.id} style={{
-                            border: '1px solid #000',
-                            padding: '10px',
-                            borderRadius: '8px',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                          }}>
-                            <h5 style={{ margin: '0 0 8px 0' }}>{u.name || u.id}</h5>
-                            <p style={{ color: '#666', fontSize: '12px', margin: '0 0 5px 0' }}>المستخدم: {u.id}</p>
-                            <p style={{ color: '#666', fontSize: '12px', margin: '0 0 5px 0' }}>
-                              الدور: {u.role === 'admin' ? 'مدير النظام' : u.role === 'department_manager' ? 'دكتور' : u.role === 'teacher' ? 'مدير القسم' : 'طالب'}
-                            </p>
-                            {u.departmentId && <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>القسم: {dept ? dept.name : 'غير محدد'}</p>}
-                            <button onClick={() => handleDeleteUser(u.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
-                          </div>
-                        );
-                      })}
+                  const q = (modalUserSearchTerm || '').toLowerCase();
+                  const list = users.filter(u => {
+                    if (!q) return true;
+                    return (u.id || '').toString().toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q) || (u.role || '').toLowerCase().includes(q);
+                  }).filter(u => modalUserFilter === 'all' || u.role === modalUserFilter);
+
+                  if (list.length === 0) return <p>لا يوجد مستخدمين</p>;
+                  return (
+                    <div
+                      ref={deptListRef}
+                      className={styles.modalListContainer}
+                      onWheel={(e) => {
+                        const el = deptListRef.current;
+                        if (!el) return;
+                        el.scrollBy({ top: e.deltaY, behavior: 'auto' });
+                        e.preventDefault();
+                      }}
+                    >
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+                        {list.map(u => {
+                          const dept = departments.find(d => d.id === u.departmentId);
+                          return (
+                            <div key={u.id} style={{
+                              border: '1px solid #000',
+                              padding: '10px',
+                              borderRadius: '8px',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                            }}>
+                              <h5 style={{ margin: '0 0 8px 0' }}>{u.name || u.id}</h5>
+                              <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>{'المستخدم: ' + (u.id || '')}</p>
+                              <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>
+                                الدور: {u.role === 'user' ? 'طالب' : u.role === 'teacher' ? 'دكتور' : u.role === 'department_manager' ? 'مدير القسم' : u.role === 'admin' ? 'مسؤول النظام' : u.role}
+                              </p>
+                              {u.departmentId && <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>القسم: {dept ? dept.name : 'غير محدد'}</p>}
+                              <div style={{ display: 'flex', gap: '6px' }}>
+                                <button onClick={() => {
+                                  const newName = prompt('الاسم الجديد:', u.name || u.id);
+                                  if (newName) handleUpdateTeacher(u.id, { name: newName });
+                                }} style={{ padding: '4px 8px', fontSize: '12px' }}>تعديل</button>
+                                <button onClick={() => handleDeleteUser(u.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })()}
@@ -2457,18 +2474,54 @@ function AddSubjectForm({ departments = [], teachers = [], onAdd, user }: { depa
   const [departmentId, setDepartmentId] = useState('');
   const [teacherId, setTeacherId] = useState('');
 
+  // Consider actual teachers (role === 'teacher') primarily
+  const availableTeachers = (teachers || []).filter((t: any) => t.role === 'teacher');
+
+  // When department changes, filter teachers to that department and auto-select first.
+  // If no teachers exist for the dept, we'll fallback to the department_manager for that dept (if any).
+  React.useEffect(() => {
+    const dept = user?.role === 'department_manager' ? user.departmentId : departmentId;
+    if (!dept) {
+      setTeacherId('');
+      return;
+    }
+    const deptTeachers = availableTeachers.filter((t: any) => t.departmentId === dept);
+    if (deptTeachers.length === 0) {
+      // fallback: find department_manager for this dept
+      const mgrs = (teachers || []).filter((t: any) => t.role === 'department_manager' && t.departmentId === dept);
+      if (mgrs.length === 0) {
+        setTeacherId('');
+      } else {
+        if (!mgrs.find(t => t.id === teacherId)) setTeacherId(mgrs[0].id);
+      }
+    } else {
+      // keep previous selection if still valid
+      if (!deptTeachers.find(t => t.id === teacherId)) setTeacherId(deptTeachers[0].id);
+    }
+  }, [departmentId, user?.departmentId, JSON.stringify(availableTeachers)]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const deptId = user?.role === 'department_manager' ? user.departmentId : departmentId;
-    const teacherRequired = teachers.length > 0;
+    const teacherRequired = availableTeachers.length > 0;
     if (name.trim() && deptId && (!teacherRequired || teacherId)) {
       onAdd(name.trim(), description.trim(), deptId, teacherId || undefined);
       setName('');
       setDescription('');
-      setDepartmentId('');
+      if (user?.role !== 'department_manager') setDepartmentId('');
       setTeacherId('');
     }
   };
+
+  // Teachers shown in select: prefer role 'teacher' in the selected dept; if none, show dept managers
+  const teachersForDept = (() => {
+    const dept = user?.role === 'department_manager' ? user.departmentId : departmentId;
+    if (!dept) return [];
+    const deptTeachers = availableTeachers.filter((t: any) => t.departmentId === dept);
+    if (deptTeachers.length > 0) return deptTeachers;
+    // fallback to department_manager(s) for that dept
+    return (teachers || []).filter((t: any) => t.departmentId === dept && t.role === 'department_manager');
+  })();
 
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -2500,19 +2553,22 @@ function AddSubjectForm({ departments = [], teachers = [], onAdd, user }: { depa
           ))}
         </select>
       )}
-      {teachers.length > 0 && (
+
+      {/** show teacher select only when there are teachers for the chosen department **/}
+      {teachersForDept.length > 0 && (
         <select
           value={teacherId}
           onChange={(e) => setTeacherId(e.target.value)}
           required
           style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
         >
-          <option value="">اختر مدير القسم</option>
-          {teachers.map((teacher) => (
+          <option value="">اختر الدكتور للقسم</option>
+          {teachersForDept.map((teacher: any) => (
             <option key={teacher.id} value={teacher.id}>{teacher.name || teacher.id}</option>
           ))}
         </select>
       )}
+
       <button type="submit" style={{ padding: '10px', background: '#1565c0', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
         إضافة المادة
       </button>

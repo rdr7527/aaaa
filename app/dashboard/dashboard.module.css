@@ -321,14 +321,14 @@
 .cardItemContent {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 0.75rem;
   margin-bottom: 0.75rem;
 }
 
 .cardItem h4 {
   margin: 0;
-  text-align: right;
+  text-align: left;
   font-size: 1.125rem;
   font-weight: 600;
   color: #0d47a1;
@@ -346,14 +346,14 @@
 .cardItemActions {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   position: relative;
   z-index: 1;
 }
 
 .cardItemActions p {
   margin: 0 0 0.5rem 0;
-  text-align: right;
+  text-align: left;
   cursor: pointer;
   color: #424242;
   transition: color 0.3s ease;
