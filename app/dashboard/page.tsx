@@ -28,6 +28,8 @@ export default function Dashboard() {
   const [teacherFilter, setTeacherFilter] = useState('all');
   const [modalUserSearchTerm, setModalUserSearchTerm] = useState('');
   const [modalUserFilter, setModalUserFilter] = useState('all');
+  const [modalStudentsSearchTerm, setModalStudentsSearchTerm] = useState('');
+  const [modalStudentsSort, setModalStudentsSort] = useState<'none' | 'name' | 'role'>('none');
   const [modalDeptSearchTerm, setModalDeptSearchTerm] = useState('');
   const [modalLibrarySearchTerm, setModalLibrarySearchTerm] = useState('');
   const deptListRef = React.useRef<HTMLDivElement | null>(null);
@@ -1421,33 +1423,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             <h2 style={{ marginTop: 0, marginBottom: 16 }}>
               {addModalType === 'subject' ? 'إضافة مادة جديدة' : addModalType === 'video' ? 'إضافة درس جديد' : addModalType === 'assignment' ? 'إضافة واجب جديد' : addModalType === 'department' ? 'إضافة قسم جديد' : 'إضافة طالب جديد'}
             </h2>
-            {addModalType === 'subject' && (
-              <AddSubjectForm departments={departments} teachers={teachers} onAdd={(name, desc, deptId, teacherId) => { handleAddSubject(name, desc, user.departmentId || deptId, teacherId); setAddModalType(null); }} user={user} />
-            )}
-            {addModalType === 'video' && (
-              <AddVideoForm subjects={subjects} onAdd={(title, url, desc, subjectId) => { handleAddVideo(title, url, desc, subjectId); setAddModalType(null); }} />
-            )}
-            {addModalType === 'assignment' && (
-              <AddAssignmentForm onAdd={(title, question, answerType, options, correctAnswer, dueDate) => { handleAddAssignment(title, question, answerType, options, correctAnswer, dueDate); setAddModalType(null); }} />
-            )}
-            {addModalType === 'department' && (
-              <AddDepartmentForm onAdd={(name, description) => { handleAddDept(name, description); setAddModalType(null); }} />
-            )}
-            {addModalType === 'book' && (
-              <div>
-                <h3>إضافة رابط كتاب</h3>
-                <form onSubmit={(e) => {
-                  e.preventDefault();
-                  const formData = new FormData(e.target as HTMLFormElement);
-                  const title = formData.get('title') as string;
-                  const url = formData.get('url') as string;
-                  const departmentId = formData.get('departmentId') as string;
-                  if (title && url && departmentId) {
-                    handleAddBook(title, url, departmentId);
-                    setAddModalType(null);
-                  }
-                }}>
-                  <div style={{ marginBottom: '10px' }}>
+            
                     <label>عنوان الكتاب</label>
                     <input name="title" type="text" required style={{ width: '100%', padding: '8px', marginTop: '5px' }} />
                   </div>
@@ -1834,29 +1810,62 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             )}
             {viewModalType === 'students' && (
               <div>
-                {filteredStudents.length === 0 ? (
-                  <p>لا يوجد طلاب</p>
-                ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
-                    {filteredStudents.map(student => {
-                      const dept = departments.find(d => d.id === student.departmentId);
-                      return (
-                        <div key={student.id} style={{
-                          border: '1px solid #000',
-                          padding: '10px',
-                          borderRadius: '8px',
-                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                        }}>
-                          <h5 style={{ margin: '0 0 8px 0' }}>{student.name || student.id}</h5>
-                          <p style={{ color: '#666', fontSize: '12px', margin: '0 0 5px 0' }}>المستخدم: {student.id}</p>
-                          {student.departmentId && <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>القسم: {dept ? dept.name : 'غير محدد'}</p>}
-                          <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>الدور: {student.role === 'admin' ? 'مسؤول النظام' : student.role === 'department_manager' ? 'مدير القسم' : student.role === 'teacher' ? 'دكتور' : 'طالب'}</p>
-                          <button onClick={() => handleDeleteUser(student.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+                  <input
+                    type="text"
+                    placeholder="ابحث عن مستخدم..."
+                    value={modalStudentsSearchTerm}
+                    onChange={(e) => setModalStudentsSearchTerm(e.target.value)}
+                    className={styles.searchInput}
+                    style={{ width: '100%' }}
+                  />
+                  {user?.role === 'department_manager' && (
+                    <select value={modalStudentsSort} onChange={(e) => setModalStudentsSort(e.target.value as any)} style={{ padding: '8px', border: '1px solid #ccc', borderRadius: 4 }}>
+                      <option value="none">فرز: بدون</option>
+                      <option value="name">فرز حسب الاسم</option>
+                      <option value="role">فرز حسب الدور</option>
+                    </select>
+                  )}
+                </div>
+
+                {(() => {
+                  const q = (modalStudentsSearchTerm || '').toLowerCase().trim();
+                  let list = Array.isArray(filteredStudents) ? [...filteredStudents] : [];
+                  if (q) {
+                    list = list.filter((s: any) => {
+                      return (s.id || '').toString().toLowerCase().includes(q) || (s.name || '').toLowerCase().includes(q) || (s.role || '').toLowerCase().includes(q);
+                    });
+                  }
+                  if (modalStudentsSort === 'name') {
+                    list.sort((a: any, b: any) => ( (a.name || a.id || '').toString().localeCompare((b.name || b.id || '').toString()) ));
+                  } else if (modalStudentsSort === 'role') {
+                    list.sort((a: any, b: any) => ( (a.role || '').toString().localeCompare((b.role || '').toString()) ));
+                  }
+
+                  if (list.length === 0) return <p>لا يوجد طلاب</p>;
+
+                  return (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+                      {list.map(student => {
+                        const dept = departments.find(d => d.id === student.departmentId);
+                        return (
+                          <div key={student.id} style={{
+                            border: '1px solid #000',
+                            padding: '10px',
+                            borderRadius: '8px',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                          }}>
+                            <h5 style={{ margin: '0 0 8px 0' }}>{student.name || student.id}</h5>
+                            <p style={{ color: '#666', fontSize: '12px', margin: '0 0 5px 0' }}>المستخدم: {student.id}</p>
+                            {student.departmentId && <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>القسم: {dept ? dept.name : 'غير محدد'}</p>}
+                            <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>الدور: {student.role === 'admin' ? 'مسؤول النظام' : student.role === 'department_manager' ? 'مدير القسم' : student.role === 'teacher' ? 'دكتور' : 'طالب'}</p>
+                            <button onClick={() => handleDeleteUser(student.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             )}
             {viewModalType === 'library' && (
