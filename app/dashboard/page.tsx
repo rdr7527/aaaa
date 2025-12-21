@@ -30,8 +30,6 @@ export default function Dashboard() {
   const [modalUserFilter, setModalUserFilter] = useState('all');
   const [modalDeptSearchTerm, setModalDeptSearchTerm] = useState('');
   const [modalLibrarySearchTerm, setModalLibrarySearchTerm] = useState('');
-  const [editingUser, setEditingUser] = useState<any>(null);
-  const [editUserModal, setEditUserModal] = useState(false);
   const deptListRef = React.useRef<HTMLDivElement | null>(null);
   const router = useRouter();
 
@@ -44,8 +42,6 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
           if (res.status === 200) {
           const data = await res.json();
           setUser(data.user);
-          // Refresh notification counts after user is set
-          setTimeout(() => refreshNotifCounts(), 100);
           // Keep teachers on the dashboard
           // For other department users (students) keep existing behavior and send to /department
           // Department managtment managers go to deputy
@@ -279,7 +275,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
   // Admin CRUD actions for users
   const handleAddUser = async (userId: string, name: string, role: string, password: string, departmentId?: string): Promise<boolean> => {
-    if (user?.role !== 'admin' && !(user?.role === 'department_manager' && role === 'user')) {
+    if (user?.role !== 'admin' && !(user?.role === 'department_manager' && (role === 'user' || role === 'teacher'))) {
       showToast('لا تملك صلاحية إضافة مستخدم', 'error');
       return false;
     }
@@ -568,6 +564,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   const [gradTitle, setGradTitle] = useState('');
   const [gradDeptId, setGradDeptId] = useState<string | null>(null);
   const [gradSearchTerm, setGradSearchTerm] = useState('');
+  const [gradOnlyDept, setGradOnlyDept] = useState(false);
 
   const [toast, setToast] = useState<{ message: string; type?: 'success' | 'error' | 'info' } | null>(null);
 
@@ -584,21 +581,17 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   const [showDeptSubjectsModal, setShowDeptSubjectsModal] = useState(false);
   const [showAddSubjectModal, setShowAddSubjectModal] = useState(false);
 
-  const refreshNotifCounts = async () => {
+  const refreshNotifCounts = () => {
     try {
-      const msgsRes = await fetch('/api/messages');
-      const msgsData = msgsRes.ok ? await msgsRes.json() : { messages: [] };
-      const msgs = msgsData.messages || [];
-
-      const notsRes = await fetch('/api/notifications');
-      const notsData = notsRes.ok ? await notsRes.json() : { notifications: [] };
-      const nots = notsData.notifications || [];
-
+      const rawMsgs = typeof window !== 'undefined' ? localStorage.getItem('app_messages') || '[]' : '[]';
+      const rawNot = typeof window !== 'undefined' ? localStorage.getItem('app_notifications') || '[]' : '[]';
+      const msgs = JSON.parse(rawMsgs) || [];
+      const nots = JSON.parse(rawNot) || [];
       const readKey = `app_messages_read_${user?.id || ''}`;
       const rawRead = typeof window !== 'undefined' ? localStorage.getItem(readKey) || '[]' : '[]';
       const readIds = JSON.parse(rawRead) || [];
-      const unreadMsgs = Array.isArray(nots) ? nots.filter((n: any) => n.to === 'all' && n.from !== user?.id && !readIds.includes(n.id)).length : 0;
-      const unreadNots = Array.isArray(nots) ? nots.filter((n: any) => (n.to === 'all' || n.to === user?.id) && n.from !== user?.id && !n.read).length : 0;
+      const unreadMsgs = Array.isArray(msgs) ? msgs.filter((m: any) => !readIds.includes(m.id)).length : 0;
+      const unreadNots = Array.isArray(nots) ? nots.filter((n: any) => String(n.to) === String(user?.id || '') && !n.read).length : 0;
       setUnreadMessagesCount(unreadMsgs);
       setUnreadNotificationsCount(unreadNots);
     } catch (e) {
@@ -607,49 +600,37 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     }
   };
 
-  const openNotifModal = async (opts?: { openTab?: 'send' | 'messages' | 'notifications'; onlyForCurrentUser?: boolean }) => {
+  const openNotifModal = (opts?: { openTab?: 'send' | 'messages' | 'notifications'; onlyForCurrentUser?: boolean }) => {
     try {
-      const msgsRes = await fetch('/api/messages');
-      const msgsData = msgsRes.ok ? await msgsRes.json() : { messages: [] };
-      const msgs = msgsData.messages || [];
-
-      const notsRes = await fetch('/api/notifications');
-      const notsData = notsRes.ok ? await notsRes.json() : { notifications: [] };
-      const nots = notsData.notifications || [];
-
+      const rawMsgs = typeof window !== 'undefined' ? localStorage.getItem('app_messages') || '[]' : '[]';
+      const rawNot = typeof window !== 'undefined' ? localStorage.getItem('app_notifications') || '[]' : '[]';
+      const msgs = JSON.parse(rawMsgs);
+      const nots = JSON.parse(rawNot);
       // If opening messages from dashboard, show unread messages only for current user
       try {
         const readKey = `app_messages_read_${user?.id || ''}`;
         const rawRead = typeof window !== 'undefined' ? localStorage.getItem(readKey) || '[]' : '[]';
         const readIds = JSON.parse(rawRead) || [];
         if (opts?.openTab === 'messages') {
-          const filteredMsgs = Array.isArray(nots) ? nots.filter((n: any) => n.to === 'all') : [];
-          setSentMessages(filteredMsgs);
-          // mark them as read for this user (only those not sent by the user)
-          const idsToMark = filteredMsgs.filter((n: any) => n.from !== user?.id).map((n: any) => n.id);
+          setSentMessages(Array.isArray(msgs) ? msgs.filter((m: any) => !readIds.includes(m.id)) : []);
+          // mark them as read for this user
+          const idsToMark = Array.isArray(msgs) ? msgs.filter((m: any) => !readIds.includes(m.id)).map((m: any) => m.id) : [];
           const newRead = Array.isArray(readIds) ? Array.from(new Set([...readIds, ...idsToMark])) : idsToMark;
           if (typeof window !== 'undefined') localStorage.setItem(readKey, JSON.stringify(newRead));
         } else {
-          setSentMessages(Array.isArray(nots) ? nots.filter((n: any) => n.to === 'all') : []);
+          setSentMessages(Array.isArray(msgs) ? msgs : []);
         }
       } catch (e) {
         setSentMessages(Array.isArray(msgs) ? msgs : []);
       }
 
       if (opts?.openTab === 'notifications' && opts?.onlyForCurrentUser) {
-        const filtered = Array.isArray(nots) ? nots.filter((n: any) => (n.to === 'all' || n.to === user?.id) && n.from !== user?.id) : [];
+        const filtered = Array.isArray(nots) ? nots.filter((n: any) => String(n.to) === String(user?.id || '')) : [];
         // mark those notifications as read
         try {
-          for (const n of filtered) {
-            if (!n.read) {
-              await fetch('/api/notifications', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: n.id, read: true }),
-              });
-              n.read = true; // update local
-            }
-          }
+          const allNots = Array.isArray(nots) ? nots : [];
+          allNots.forEach((n: any) => { if (String(n.to) === String(user?.id || '')) n.read = true; });
+          if (typeof window !== 'undefined') localStorage.setItem('app_notifications', JSON.stringify(allNots));
         } catch (e) {}
         setSentNotifications(filtered);
       } else {
@@ -662,6 +643,12 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     setNotifView(opts?.openTab || 'messages');
     setNotifMode('message');
     setNotifRecipient('');
+    // default target: department managers can only send to their department
+    if (user?.role === 'department_manager') {
+      setNotifTarget('departments');
+    } else {
+      setNotifTarget('all');
+    }
     setShowNotifModal(true);
     // update counts after possible marking
     setTimeout(() => refreshNotifCounts(), 50);
@@ -782,10 +769,26 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   ).filter(t => teacherFilter === 'all' || t.role === teacherFilter);
 
   const students = users.filter(u => u.role === 'user');
-  const filteredStudents = students.filter(s => 
-    (s.id || '').includes(searchTerm) || 
-    (s.name || '').includes(searchTerm)
-  );
+  const filteredStudents = (() => {
+    // For department managers, show students of their department
+    // and also show the doctor(s) (teachers / department_manager) of the same department.
+    if (user?.role === 'department_manager') {
+      return users.filter(u => {
+        const sameDept = u.departmentId && u.departmentId === user.departmentId;
+        const isStudent = u.role === 'user' && sameDept;
+        const isDoctor = (u.role === 'teacher' || u.role === 'department_manager') && sameDept;
+        return isStudent || isDoctor;
+      }).filter(s => 
+        (s.id || '').includes(searchTerm) || 
+        (s.name || '').includes(searchTerm)
+      );
+    }
+
+    return students.filter(s => 
+      (s.id || '').includes(searchTerm) || 
+      (s.name || '').includes(searchTerm)
+    );
+  })();
 
   async function logout() {
     await fetch('/api/logout', { method: 'POST' });
@@ -896,7 +899,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                     </div>
                     <div className={styles.cardItemActions}>
                       <p onClick={() => openNotifModal({ openTab: 'messages' })}>الرسايل {unreadMessagesCount > 0 ? `(${unreadMessagesCount})` : ''}</p>
-                      <p onClick={() => openNotifModal({ openTab: 'notifications' })}>التنبيهات {unreadMessagesCount > 0 ? `(${unreadMessagesCount})` : ''}</p>
+                      <p onClick={() => openNotifModal({ openTab: 'notifications', onlyForCurrentUser: true })}>التنبيهات {unreadNotificationsCount > 0 ? `(${unreadNotificationsCount})` : ''}</p>
                     </div>
                   </div>
 
@@ -980,10 +983,10 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                             <div key={u.id} className={styles.departmentCard}>
                               <h4 className={styles.cardTitle}>{u.name || u.id}</h4>
                               <p className={styles.cardDesc}>المستخدم: {u.id}</p>
-                              <p className={styles.cardDesc}>
-                                الدور: {u.role === 'admin' ? 'مسؤول النظام' : u.role === 'department_manager' ? 'دكتور' : u.role === 'teacher' ? 'مدير القسم' : 'طالب'}
-                              </p>
                               {u.departmentId && <p className={styles.cardDesc}>القسم: {dept ? dept.name : 'غير محدد'}</p>}
+                              <p className={styles.cardDesc}>
+                                الدور: {u.role === 'admin' ? 'مسؤول النظام' : u.role === 'department_manager' ? 'مدير القسم' : u.role === 'teacher' ? 'دكتور' : 'طالب'}
+                              </p>
                               <div className={styles.cardActions}>
                                 <button 
                                   onClick={() => handleDeleteUser(u.id)}
@@ -1249,7 +1252,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                     {(user.role === 'department_manager' || user.role === 'teacher') && (
                       <div style={{ marginTop: '20px' }}>
                         <h4>أضف مادة جديدة</h4>
-                        <AddSubjectForm departments={departments} teachers={[]} onAdd={(name, desc, deptId, teacherId) => handleAddSubject(name, desc, user.departmentId || deptId, user.role === 'teacher' ? user.id : teacherId)} user={user} />
+                        <AddSubjectForm departments={departments} teachers={teachers} onAdd={(name, desc, deptId, teacherId) => handleAddSubject(name, desc, user.departmentId || deptId, user.role === 'teacher' ? user.id : teacherId)} user={user} />
                       </div>
                     )}
                   </div>
@@ -1299,7 +1302,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             <>
               <div className={styles.cardHeader}>
                 <div>
-                  <h2>بوابة الدكتور</h2>
+                  <h2>{user.role === 'department_manager' ? 'بوابة مدير القسم' : 'بوابة الدكتور'}</h2>
                   <div style={{ marginTop: '10px', fontSize: '14px', color: '#0d47a1', lineHeight: '1.5', fontFamily: 'sans-serif' }}>
                     <p style={{ margin: '5px 0', fontWeight: '500' }}>القسم: {departments.find(d => d.id === user.departmentId)?.name || 'غير محدد'}</p>
                     <p style={{ margin: '5px 0', fontWeight: '500' }}>الاسم: {user.name || user.id}</p>
@@ -1324,39 +1327,45 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                         </div>
                       </div>
 
-                      {/* الدروس */}
+                      {/* الدروس محذوفة لمستخدم مدير القسم */}
+
+                      {/* مشاريع التخرج (لمدير القسم) */}
                       <div className={styles.cardItem}>
                         <div className={styles.cardItemContent}>
-                          <img src="../src/svg/video.svg" alt="فيديو" />
-                          <h4>الدروس</h4>
+                          <img src="../src/svg/file.svg" alt="مشاريع" />
+                          <h4>مشاريع التخرج</h4>
                         </div>
                         <div className={styles.cardItemActions}>
-                          <p onClick={() => setAddModalType('video')}>إضافة درس</p>
-                          <p onClick={() => setViewModalType('videos')}>عرض الدروس ({filteredVideos.length})</p>
+                          <p onClick={(e) => { e.stopPropagation(); setShowGradModal(true); }}>رفع مشروع جديد</p>
+                          <p onClick={(e) => { e.stopPropagation(); setGradOnlyDept(true); setViewModalType('graduation_projects'); }}>عرض مشاريع القسم ({graduationProjects.filter(p => p.departmentId === user.departmentId).length})</p>
                         </div>
                       </div>
 
-                      {/* الواجبات */}
+                      {/* إدارة المستخدمين محذوفة لمدير القسم */}
+
+                      {/* Notifications card for department_manager */}
                       <div className={styles.cardItem}>
                         <div className={styles.cardItemContent}>
-                          <img src="../src/svg/assignment.svg" alt="واجب" />
-                          <h4>الواجبات</h4>
+                          <img src="../src/svg/notification.svg" alt="التنبيهات" />
+                          <h4>التنبيهات</h4>
                         </div>
                         <div className={styles.cardItemActions}>
-                          <p onClick={() => setAddModalType('assignment')}>إضافة واجب</p>
-                          <p onClick={() => setViewModalType('assignments')}>عرض الواجبات ({assignments?.length || 0})</p>
+                          <p onClick={(e) => { e.stopPropagation(); openNotifModal({ openTab: 'messages' }); }}>الرسايل {unreadMessagesCount > 0 ? `(${unreadMessagesCount})` : ''}</p>
+                          <p onClick={(e) => { e.stopPropagation(); openNotifModal({ openTab: 'notifications', onlyForCurrentUser: true }); }}>التنبيهات {unreadNotificationsCount > 0 ? `(${unreadNotificationsCount})` : ''}</p>
                         </div>
                       </div>
 
-                      {/* إضافة الطلاب */}
+                      {/* الواجبات محذوفة لمستخدم مدير القسم */}
+
+                      {/* إدارة المستخدمين */}
                       <div className={styles.cardItem}>
                         <div className={styles.cardItemContent}>
-                          <img src="../src/svg/student.svg" alt="طالب" />
-                          <h4>إضافة الطلاب</h4>
+                          <img src="../src/svg/student.svg" alt="المستخدمين" />
+                          <h4>إدارة المستخدمين</h4>
                         </div>
                         <div className={styles.cardItemActions}>
-                          <p onClick={() => setAddModalType('student')}>إضافة طالب</p>
-                          <p onClick={() => setViewModalType('students')}>عرض الطلاب ({filteredStudents.length})</p>
+                          <p onClick={(e) => { e.stopPropagation(); setAddModalType('student'); }}>إضافة مستخدم</p>
+                          <p onClick={(e) => { e.stopPropagation(); setViewModalType('students'); }}>عرض المستخدمين ({users.filter(u => String(u.departmentId) === String(user.departmentId)).length})</p>
                         </div>
                       </div>
                     </div>
@@ -1413,7 +1422,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
               {addModalType === 'subject' ? 'إضافة مادة جديدة' : addModalType === 'video' ? 'إضافة درس جديد' : addModalType === 'assignment' ? 'إضافة واجب جديد' : addModalType === 'department' ? 'إضافة قسم جديد' : 'إضافة طالب جديد'}
             </h2>
             {addModalType === 'subject' && (
-              <AddSubjectForm departments={departments} teachers={[]} onAdd={(name, desc, deptId, teacherId) => { handleAddSubject(name, desc, user.departmentId || deptId, teacherId); setAddModalType(null); }} user={user} />
+              <AddSubjectForm departments={departments} teachers={teachers} onAdd={(name, desc, deptId, teacherId) => { handleAddSubject(name, desc, user.departmentId || deptId, teacherId); setAddModalType(null); }} user={user} />
             )}
             {addModalType === 'video' && (
               <AddVideoForm subjects={subjects} onAdd={(title, url, desc, subjectId) => { handleAddVideo(title, url, desc, subjectId); setAddModalType(null); }} />
@@ -1467,7 +1476,8 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                   return ok;
                 }}
                 showToast={showToast}
-                allowedRoles={['user', 'department_manager', 'teacher', 'admin']}
+                allowedRoles={user?.role === 'admin' ? ['user', 'department_manager', 'teacher', 'admin'] : user?.role === 'department_manager' ? ['user', 'teacher'] : ['user']}
+                defaultDepartmentId={user?.departmentId}
               />
             )}
           </div>
@@ -1482,7 +1492,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
               <button onClick={() => setNotifView('send')} style={{ padding: '8px 12px', background: notifView === 'send' ? '#1976d2' : '#e0e0e0', color: notifView === 'send' ? 'white' : 'black', border: 'none', borderRadius: 6, cursor: 'pointer' }}>إرسال</button>
               <button onClick={() => { try { const rawMsgs = typeof window !== 'undefined' ? localStorage.getItem('app_messages') || '[]' : '[]'; setSentMessages(Array.isArray(JSON.parse(rawMsgs)) ? JSON.parse(rawMsgs) : []); } catch(e){ setSentMessages([]);} setNotifView('messages'); }} style={{ padding: '8px 12px', background: notifView === 'messages' ? '#1976d2' : '#e0e0e0', color: notifView === 'messages' ? 'white' : 'black', border: 'none', borderRadius: 6, cursor: 'pointer' }}>الرسائل المرسلة</button>
-              <button onClick={async () => { try { const res = await fetch('/api/notifications'); const data = await res.json(); setSentNotifications(data.notifications || []); } catch(e){ setSentNotifications([]);} setNotifView('notifications'); }} style={{ padding: '8px 12px', background: notifView === 'notifications' ? '#1976d2' : '#e0e0e0', color: notifView === 'notifications' ? 'white' : 'black', border: 'none', borderRadius: 6, cursor: 'pointer' }}>التنبيهات المرسلة</button>
+              <button onClick={() => { try { const rawNot = typeof window !== 'undefined' ? localStorage.getItem('app_notifications') || '[]' : '[]'; setSentNotifications(Array.isArray(JSON.parse(rawNot)) ? JSON.parse(rawNot) : []); } catch(e){ setSentNotifications([]);} setNotifView('notifications'); }} style={{ padding: '8px 12px', background: notifView === 'notifications' ? '#1976d2' : '#e0e0e0', color: notifView === 'notifications' ? 'white' : 'black', border: 'none', borderRadius: 6, cursor: 'pointer' }}>التنبيهات المرسلة</button>
 
             </div>
 
@@ -1497,12 +1507,18 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                 {notifMode === 'message' ? (
                   <>
                     <label>اختر المستلمين</label>
-                    <select value={notifTarget} onChange={(e) => setNotifTarget(e.target.value as any)} className={styles.searchInput}>
-                      <option value="all">الكل</option>
-                      <option value="departments">أقسام</option>
-                      <option value="doctor">دكتور</option>
-                      <option value="students">طلاب</option>
-                    </select>
+                    {user?.role === 'department_manager' ? (
+                      <select value={notifTarget} onChange={(e) => setNotifTarget(e.target.value as any)} className={styles.searchInput}>
+                        <option value="departments">أقسام (قسمك فقط)</option>
+                      </select>
+                    ) : (
+                      <select value={notifTarget} onChange={(e) => setNotifTarget(e.target.value as any)} className={styles.searchInput}>
+                        <option value="all">الكل</option>
+                        <option value="departments">أقسام</option>
+                        <option value="doctor">دكتور</option>
+                        <option value="students">طلاب</option>
+                      </select>
+                    )}
                   </>
                 ) : (
                   <>
@@ -1521,57 +1537,54 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
                 <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-start' }}>
                   <button
-                    onClick={async () => {
+                    onClick={() => {
                       if (!notifMessage.trim()) { showToast('اكتب نص الرسالة', 'error'); return; }
                       try {
                         if (notifMode === 'notification') {
                           if (!notifRecipient) { showToast('اختر مستخدم للتنبيه', 'error'); return; }
                           const notif = {
+                            id: Date.now().toString(),
                             to: notifRecipient,
                             from: user?.id || 'system',
                             fromName: user?.name || user?.id || 'مستخدم',
                             message: notifMessage.trim(),
+                            date: new Date().toISOString(),
                           };
-                          const res = await fetch('/api/notifications', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(notif),
-                          });
-                          if (res.ok) {
-                            const data = await res.json();
-                            setSentNotifications(prev => [data.notification, ...prev]);
-                          } else {
-                            throw new Error('Failed to send notification');
-                          }
+                          const raw = localStorage.getItem('app_notifications') || '[]';
+                          const arr = JSON.parse(raw);
+                          if (!Array.isArray(arr)) arr.length = 0;
+                          arr.unshift(notif);
+                          localStorage.setItem('app_notifications', JSON.stringify(arr));
+                          setSentNotifications(prev => [notif, ...prev]);
                         } else {
-                          const notif = {
-                            to: notifTarget,
+                          const toField = (notifTarget === 'departments' && user?.role === 'department_manager') ? (user.departmentId || 'departments') : notifTarget;
+                          const msg = {
+                            id: Date.now().toString(),
+                            to: toField,
                             from: user?.id || 'system',
                             fromName: user?.name || user?.id || 'مستخدم',
                             message: notifMessage.trim(),
+                            date: new Date().toISOString(),
                           };
-                          const res = await fetch('/api/notifications', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(notif),
-                          });
-                          if (res.ok) {
-                            const data = await res.json();
-                            setSentMessages(prev => [data.notification, ...prev]);
-                            // refresh counts
-                            try {
-                              setTimeout(() => {
-                                refreshNotifCounts();
-                              }, 30);
-                            } catch (e) {}
-                          } else {
-                            throw new Error('Failed to send message');
-                          }
+                          const raw = localStorage.getItem('app_messages') || '[]';
+                          const arr = JSON.parse(raw);
+                          if (!Array.isArray(arr)) arr.length = 0;
+                          arr.unshift(msg);
+                          localStorage.setItem('app_messages', JSON.stringify(arr));
+                          setSentMessages(prev => [msg, ...prev]);
+                          // refresh counts and mark this message as unread for current user
+                          try {
+                            // small delay to ensure storage is written
+                            setTimeout(() => {
+                              try { refreshNotifCounts(); } catch (e) {}
+                              setUnreadMessagesCount(prev => (typeof prev === 'number' ? prev + 1 : 1));
+                            }, 30);
+                          } catch (e) {}
                         }
                         showToast('تم الإرسال', 'success');
-                        refreshNotifCounts();
+                        try { refreshNotifCounts(); } catch (e) {}
                         setNotifMessage('');
-                        setNotifTarget('all');
+                        setNotifTarget(user?.role === 'department_manager' ? 'departments' : 'all');
                         setNotifRecipient('');
                         setNotifMode('message');
                         setShowNotifModal(false);
@@ -1714,6 +1727,10 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                 {(() => {
                   const q = (gradSearchTerm || '').trim().toLowerCase();
                   const list = graduationProjects.filter((p: any) => {
+                    // if viewing only department projects (from dept manager card), filter by user's dept
+                    if (gradOnlyDept && user?.departmentId) {
+                      if (p.departmentId !== user.departmentId) return false;
+                    }
                     if (!q) return true;
                     const name = (p.name || p.originalName || '').toString().toLowerCase();
                     const deptName = (departments.find((d: any) => d.id === p.departmentId)?.name || '').toString().toLowerCase();
@@ -1833,6 +1850,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                           <h5 style={{ margin: '0 0 8px 0' }}>{student.name || student.id}</h5>
                           <p style={{ color: '#666', fontSize: '12px', margin: '0 0 5px 0' }}>المستخدم: {student.id}</p>
                           {student.departmentId && <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>القسم: {dept ? dept.name : 'غير محدد'}</p>}
+                          <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>الدور: {student.role === 'admin' ? 'مسؤول النظام' : student.role === 'department_manager' ? 'مدير القسم' : student.role === 'teacher' ? 'دكتور' : 'طالب'}</p>
                           <button onClick={() => handleDeleteUser(student.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
                         </div>
                       );
@@ -1945,15 +1963,14 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                             }}>
                               <h5 style={{ margin: '0 0 8px 0' }}>{u.name || u.id}</h5>
                               <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>{'المستخدم: ' + (u.id || '')}</p>
+                              {u.departmentId && <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>القسم: {dept ? dept.name : 'غير محدد'}</p>}
                               <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>
                                 الدور: {u.role === 'user' ? 'طالب' : u.role === 'teacher' ? 'دكتور' : u.role === 'department_manager' ? 'مدير القسم' : u.role === 'admin' ? 'مسؤول النظام' : u.role}
                               </p>
-                              {u.departmentId && <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>القسم: {dept ? dept.name : 'غير محدد'}</p>}
                               <div style={{ display: 'flex', gap: '6px' }}>
                                 <button onClick={() => {
-                                  setEditingUser({ ...u, originalId: u.id });
-                                  setEditUserModal(true);
-                                  setViewModalType(null);
+                                  const newName = prompt('الاسم الجديد:', u.name || u.id);
+                                  if (newName) handleUpdateTeacher(u.id, { name: newName });
                                 }} style={{ padding: '4px 8px', fontSize: '12px' }}>تعديل</button>
                                 <button onClick={() => handleDeleteUser(u.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
                               </div>
@@ -2123,60 +2140,6 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
               })()}
             </div>
 
-          </div>
-        </div>
-      )}
-
-      {editUserModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999 }}>
-          <div style={{ background: 'white', padding: '20px', maxWidth: '500px', width: '90%', borderRadius: 8, position: 'relative', direction: 'rtl' }}>
-            <button onClick={() => { setEditUserModal(false); setViewModalType('users'); }} style={{ position: 'absolute', left: 8, top: 8, fontSize: 20, border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
-            <h2 style={{ marginTop: 0, marginBottom: 12 }}>تعديل المستخدم</h2>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              const updates: any = {};
-              if (editingUser.name !== undefined) updates.name = editingUser.name;
-              if (editingUser.password) updates.password = editingUser.password;
-              if (editingUser.id !== editingUser.originalId) updates.newId = editingUser.id;
-              await handleUpdateTeacher(editingUser.originalId || editingUser.id, updates);
-              setEditUserModal(false);
-              setEditingUser(null);
-              setViewModalType('users');
-            }}>
-              <div style={{ marginBottom: 10 }}>
-                <label style={{ display: 'block', marginBottom: 5 }}>الاسم:</label>
-                <input
-                  type="text"
-                  value={editingUser.name || ''}
-                  onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
-                  required
-                />
-              </div>
-              <div style={{ marginBottom: 10 }}>
-                <label style={{ display: 'block', marginBottom: 5 }}>كلمة المرور:</label>
-                <input
-                  type="password"
-                  value={editingUser.password || ''}
-                  onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })}
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
-                />
-              </div>
-              <div style={{ marginBottom: 10 }}>
-                <label style={{ display: 'block', marginBottom: 5 }}>اليوزر (اسم المستخدم):</label>
-                <input
-                  type="text"
-                  value={editingUser.id || ''}
-                  onChange={(e) => setEditingUser({ ...editingUser, id: e.target.value })}
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
-                  required
-                />
-              </div>
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                <button type="button" onClick={() => { setEditUserModal(false); setViewModalType('users'); }} style={{ padding: '8px 16px', border: '1px solid #ccc', background: 'white', borderRadius: '4px', cursor: 'pointer' }}>إلغاء</button>
-                <button type="submit" style={{ padding: '8px 16px', background: '#1565c0', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>حفظ</button>
-              </div>
-            </form>
           </div>
         </div>
       )}
@@ -2384,12 +2347,12 @@ function AddDepartmentForm({ onAdd }: { onAdd: (name: string, description: strin
   );
 }
 
-function AddUserForm({ departments, subjects, onAdd, allowedRoles = ['user', 'teacher', 'department_manager', 'admin'], showToast }: { departments?: any[], subjects?: any[], onAdd: (userId: string, name: string, role: string, password: string, departmentId?: string, subjectId?: string) => Promise<boolean> | boolean | void, allowedRoles?: string[], showToast?: (msg: string, type?: 'success'|'error'|'info') => void }) {
+function AddUserForm({ departments, subjects, onAdd, allowedRoles = ['user', 'teacher', 'department_manager', 'admin'], defaultDepartmentId, showToast }: { departments?: any[], subjects?: any[], onAdd: (userId: string, name: string, role: string, password: string, departmentId?: string, subjectId?: string) => Promise<boolean> | boolean | void, allowedRoles?: string[], defaultDepartmentId?: string, showToast?: (msg: string, type?: 'success'|'error'|'info') => void }) {
   const [userId, setUserId] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState('user');
   const [password, setPassword] = useState('');
-  const [departmentId, setDepartmentId] = useState('');
+  const [departmentId, setDepartmentId] = useState(defaultDepartmentId || '');
   const [subjectId, setSubjectId] = useState('');
 
   React.useEffect(() => {
@@ -2446,8 +2409,8 @@ function AddUserForm({ departments, subjects, onAdd, allowedRoles = ['user', 'te
         style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
       >
         {allowedRoles.includes('admin') && <option value="admin">مسؤول النظام</option>}
-        {allowedRoles.includes('department_manager') && <option value="department_manager">دكتور</option>}
-        {allowedRoles.includes('teacher') && <option value="teacher">مدير القسم</option>}
+        {allowedRoles.includes('department_manager') && <option value="department_manager">مدير القسم</option>}
+        {allowedRoles.includes('teacher') && <option value="teacher">دكتور</option>}
         {allowedRoles.includes('user') && <option value="user">طالب</option>}
         
         

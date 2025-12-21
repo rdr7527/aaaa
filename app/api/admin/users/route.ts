@@ -71,10 +71,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'User already exists' }, { status: 400 });
   }
   
-  // Department managers can only add users to their department and only as 'user' role
+  // Department managers can only add users to their own department.
+  // Allow them to add students ('user') and also add teachers ('teacher').
   if (userInfo?.role === 'department_manager') {
-    if (body.role !== 'user' || body.departmentId !== userInfo.departmentId) {
-      return NextResponse.json({ ok: false, error: 'Department managers can only add students to their department' }, { status: 403 });
+    const allowed = body.role === 'user' || body.role === 'teacher';
+    if (!allowed || body.departmentId !== userInfo.departmentId) {
+      return NextResponse.json({ ok: false, error: 'Department managers can only add students or teachers to their department' }, { status: 403 });
     }
   }
   
