@@ -79,7 +79,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
   const loadData = async () => {
     try {
-      const deptRes = await fetch('/api/departments', { credentials: 'include' });
+      const deptRes = await fetch('/api/departments');
       if (deptRes.ok) {
         const deptData = await deptRes.json();
         setDepartments(deptData.departments || []);
@@ -87,25 +87,20 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
       // Admin needs departments, users, and subjects data
       if (user?.role === 'admin') {
-        const usersRes = await fetch('/api/admin/users', { credentials: 'include' });
+        const usersRes = await fetch('/api/admin/users');
         if (usersRes.ok) {
           const usersData = await usersRes.json();
           setUsers(usersData.users || []);
         }
 
-        const subjRes = await fetch('/api/subjects', { credentials: 'include' });
+        const subjRes = await fetch('/api/subjects');
         if (subjRes.ok) {
           const subjData = await subjRes.json();
-          let allSubjects = subjData.subjects || [];
-          if (user?.role === 'user') {
-            // students only see subjects they've been added to
-            allSubjects = allSubjects.filter((s: any) => Array.isArray(s.students) && s.students.includes(user.id));
-          }
-          setSubjects(allSubjects);
+          setSubjects(subjData.subjects || []);
         }
 
         // also load library for admin so added books persist after reload
-        const libResAdmin = await fetch('/api/library', { credentials: 'include' });
+        const libResAdmin = await fetch('/api/library');
         if (libResAdmin.ok) {
           const libData = await libResAdmin.json();
           setBooks(libData || []);
@@ -115,23 +110,19 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
         return;
       }
 
-      const subjRes = await fetch('/api/subjects', { credentials: 'include' });
+      const subjRes = await fetch('/api/subjects');
       if (subjRes.ok) {
         const subjData = await subjRes.json();
-        let allSubjects = subjData.subjects || [];
-        if (user?.role === 'user') {
-          allSubjects = allSubjects.filter((s: any) => Array.isArray(s.students) && s.students.includes(user.id));
-        }
-        setSubjects(allSubjects || []);
+        setSubjects(subjData.subjects || []);
       }
 
-      const libRes = await fetch('/api/library', { credentials: 'include' });
+      const libRes = await fetch('/api/library');
       if (libRes.ok) {
         const libData = await libRes.json();
         setBooks(libData || []);
       }
 
-      const vidRes = await fetch('/api/videos', { credentials: 'include' });
+      const vidRes = await fetch('/api/videos');
       if (vidRes.ok) {
         const vidData = await vidRes.json();
         setVideos(vidData.videos || []);
@@ -163,14 +154,10 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       setDepartments([dept]);
       // subjects may be nested inside dept
       const deptSubjects = dept.subjects || [];
-      let visibleSubjects = deptSubjects;
-      if (user?.role === 'user') {
-        visibleSubjects = (deptSubjects || []).filter((s: any) => Array.isArray(s.students) && s.students.includes(user.id));
-      }
-      setSubjects(visibleSubjects || []);
-      // gather videos only from visible subjects
+      setSubjects(deptSubjects || []);
+      // gather videos
       const deptVideos: any[] = [];
-      (visibleSubjects || []).forEach((s: any) => {
+      (deptSubjects || []).forEach((s: any) => {
         (s.videos || []).forEach((v: any) => deptVideos.push({ ...v, subjectName: s.name, subjectId: s.id }));
       });
       setVideos(deptVideos);
@@ -305,7 +292,6 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     try {
       const res = await fetch('/api/admin/users', {
         method: 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: userId, name, role, password, departmentId: departmentId || null }),
       });
@@ -333,7 +319,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     if (user?.role !== 'admin' && user?.role !== 'department_manager') return;
     if (!confirm('هل تريد حذف هذا المستخدم؟')) return;
     try {
-      const res = await fetch(`/api/admin/users?id=${encodeURIComponent(userId)}`, { method: 'DELETE', credentials: 'include' });
+      const res = await fetch(`/api/admin/users?id=${encodeURIComponent(userId)}`, { method: 'DELETE' });
       if (res.ok) {
         if (user?.role === 'admin') {
           loadData();
@@ -621,7 +607,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       let msgs: any[] = [];
       // try server first
       try {
-        const resp = await fetch('/api/messages', { credentials: 'include' });
+        const resp = await fetch('/api/messages');
         if (resp.ok) {
           const body = await resp.json();
           msgs = body.messages || [];
@@ -713,7 +699,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
   const loadGraduationProjects = async () => {
     try {
-      const res = await fetch('/api/graduation_projects', { credentials: 'include' });
+      const res = await fetch('/api/graduation_projects');
       if (res.ok) {
         const body = await res.json();
         setGraduationProjects(body.projects || []);
@@ -843,7 +829,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     if ((editForm.password || '').trim()) payload.password = (editForm.password || '').trim();
 
     try {
-      const res = await fetch('/api/admin/users', { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const res = await fetch('/api/admin/users', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await res.json();
       if (!data || !data.ok) {
         setToast({ type: 'error', message: data?.error || 'خطأ أثناء التعديل' });
@@ -865,7 +851,8 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       return;
     }
     try {
-      const res = await fetch(`/api/subjects/${encodeURIComponent(addStudentSubjectId)}`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ addStudent: addStudentId }) });
+      const deptId = user?.departmentId || '';
+      const res = await fetch(`/api/departments/${encodeURIComponent(deptId)}/subjects/${encodeURIComponent(addStudentSubjectId)}`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ addStudent: addStudentId }) });
       const data = await res.json();
       if (!data || !data.ok) {
         setToast({ type: 'error', message: data?.error || 'فشل إضافة الطالب' });
@@ -1761,7 +1748,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                             date: new Date().toISOString(),
                           };
                           try {
-                            const res = await fetch('/api/messages', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(msg) });
+                            const res = await fetch('/api/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(msg) });
                             if (res.ok) {
                               const body = await res.json();
                               const saved = body.message || body;

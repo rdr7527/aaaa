@@ -34,3 +34,16 @@ export async function POST(req: Request) {
   writeUsersFile(data);
   return NextResponse.json({ ok: true, video });
 }
+
+export async function GET(req: Request) {
+  const data = readUsersFile();
+  const videos: any[] = [];
+  (data.departments || []).forEach((dept: any) => {
+    (dept.subjects || []).forEach((subj: any) => {
+      (subj.videos || []).forEach((v: any) => {
+        videos.push({ ...v, departmentId: dept.id, subjectId: subj.id, subjectName: subj.name, departmentName: dept.name });
+      });
+    });
+  });
+  return NextResponse.json({ ok: true, videos });
+}
