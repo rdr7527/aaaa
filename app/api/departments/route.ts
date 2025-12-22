@@ -31,7 +31,8 @@ export async function GET(req: Request) {
     
     // Allow if admin OR if department_manager managing this dept
     const isAllowed = payload.role === 'admin' || 
-                      (payload.role === 'department_manager' && payload.departmentId === id);
+              (payload.role === 'department_manager' && payload.departmentId === id) ||
+              (payload.role === 'teacher' && payload.departmentId === id);
     
     if (isAllowed) {
       return NextResponse.json({ ok: true, department: dept });

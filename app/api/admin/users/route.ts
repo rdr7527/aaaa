@@ -24,16 +24,15 @@ function getUserInfo(req: Request) {
 }
 
 export async function GET(req: Request) {
-  if (!isAdminOrDeptManager(req)) {
+  const userInfo = getUserInfo(req);
+  if (!userInfo || !['admin','department_manager','teacher'].includes(userInfo.role)) {
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 403 });
   }
-  
-  const userInfo = getUserInfo(req);
   const data = readUsersFile();
   let users = data.users || [];
   
   // If department manager, filter to only users in their department
-  if (userInfo?.role === 'department_manager') {
+  if (userInfo?.role === 'department_manager' || userInfo?.role === 'teacher') {
     users = users.filter((u: any) => u.departmentId === userInfo.departmentId);
   }
   

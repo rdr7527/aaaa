@@ -35,52 +35,51 @@ export default function Dashboard() {
   const deptListRef = React.useRef<HTMLDivElement | null>(null);
   const router = useRouter();
 
+  // Edit user modal state
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [editForm, setEditForm] = useState({ name: '', newId: '', password: '' });
+
+  // Add-student-to-subject modal state (for teachers)
+  const [showAddStudentModal, setShowAddStudentModal] = useState(false);
+  const [addStudentSubjectId, setAddStudentSubjectId] = useState<string | null>(null);
+  const [addStudentId, setAddStudentId] = useState<string | null>(null);
+
 const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   
-  useEffect(()=>{
-    (async ()=>{
+  useEffect(() => {
+    // run once on mount: fetch current user and load role-specific data
+    (async () => {
       try {
-        const res = await fetch('/api/me');
-          if (res.status === 200) {
+        const res = await fetch('/api/me', { credentials: 'include' });
+        if (res.status === 200) {
           const data = await res.json();
           setUser(data.user);
-          // Keep teachers on the dashboard
-          // For other department users (students) keep existing behavior and send to /department
-          // Department managtment managers go to deputy
-          if (data.user.role !== 'admin' && data.user.role !== 'department_manager' && data.user.role !== 'teacher' && data.user.departmentId) {
-            router.push('/department');
+          // Load data depending on role
+          if (data.user.role === 'admin') {
+            await loadData();
+          } else if (data.user.role === 'department_manager' || data.user.role === 'teacher') {
+            if (data.user.departmentId) await loadDepartmentData(data.user.departmentId);
+            else await loadData();
+          } else {
+            // non-staff department users go to /department
+            if (data.user.departmentId) router.push('/department');
           }
-          // Keep department managers on the dashboard
-          if (data.user.role !== 'admin' && data.user.role !== 'department_manager' && data.user.role !== 'teacher' && data.user.departmentId) {
-            router.push('/department');
-          }
+          setLoading(false);
         } else {
+          setLoading(false);
           router.push('/login');
         }
       } catch (e) {
-        router.push('/login');
-      } finally {
+        console.error(e);
         setLoading(false);
+        router.push('/login');
       }
     })();
-  },[]);
-
-  useEffect(() => {
-    if (!user) return;
-    if (user.role === 'admin') {
-      loadData();
-      // Ensure admin only sees departments tab
-      if (activeTab !== 'departments') {
-        setActiveTab('departments');
-      }
-    } else if (user.role === 'department_manager') {
-      loadDepartmentData(user.departmentId);
-    }
-  }, [user]);
+  }, []);
 
   const loadData = async () => {
     try {
-      const deptRes = await fetch('/api/departments');
+      const deptRes = await fetch('/api/departments', { credentials: 'include' });
       if (deptRes.ok) {
         const deptData = await deptRes.json();
         setDepartments(deptData.departments || []);
@@ -88,20 +87,25 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
       // Admin needs departments, users, and subjects data
       if (user?.role === 'admin') {
-        const usersRes = await fetch('/api/admin/users');
+        const usersRes = await fetch('/api/admin/users', { credentials: 'include' });
         if (usersRes.ok) {
           const usersData = await usersRes.json();
           setUsers(usersData.users || []);
         }
 
-        const subjRes = await fetch('/api/subjects');
+        const subjRes = await fetch('/api/subjects', { credentials: 'include' });
         if (subjRes.ok) {
           const subjData = await subjRes.json();
-          setSubjects(subjData.subjects || []);
+          let allSubjects = subjData.subjects || [];
+          if (user?.role === 'user') {
+            // students only see subjects they've been added to
+            allSubjects = allSubjects.filter((s: any) => Array.isArray(s.students) && s.students.includes(user.id));
+          }
+          setSubjects(allSubjects);
         }
 
         // also load library for admin so added books persist after reload
-        const libResAdmin = await fetch('/api/library');
+        const libResAdmin = await fetch('/api/library', { credentials: 'include' });
         if (libResAdmin.ok) {
           const libData = await libResAdmin.json();
           setBooks(libData || []);
@@ -111,19 +115,23 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
         return;
       }
 
-      const subjRes = await fetch('/api/subjects');
+      const subjRes = await fetch('/api/subjects', { credentials: 'include' });
       if (subjRes.ok) {
         const subjData = await subjRes.json();
-        setSubjects(subjData.subjects || []);
+        let allSubjects = subjData.subjects || [];
+        if (user?.role === 'user') {
+          allSubjects = allSubjects.filter((s: any) => Array.isArray(s.students) && s.students.includes(user.id));
+        }
+        setSubjects(allSubjects || []);
       }
 
-      const libRes = await fetch('/api/library');
+      const libRes = await fetch('/api/library', { credentials: 'include' });
       if (libRes.ok) {
         const libData = await libRes.json();
         setBooks(libData || []);
       }
 
-      const vidRes = await fetch('/api/videos');
+      const vidRes = await fetch('/api/videos', { credentials: 'include' });
       if (vidRes.ok) {
         const vidData = await vidRes.json();
         setVideos(vidData.videos || []);
@@ -136,7 +144,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   const loadDepartmentData = async (deptId: string) => {
     if (!deptId) return;
     try {
-      const res = await fetch(`/api/departments?id=${deptId}`, { cache: 'no-store' });
+      const res = await fetch(`/api/departments?id=${deptId}`, { cache: 'no-store', credentials: 'include' });
       if (!res.ok) {
         console.error('فشل جلب القسم');
         setDepartments([]);
@@ -155,16 +163,20 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       setDepartments([dept]);
       // subjects may be nested inside dept
       const deptSubjects = dept.subjects || [];
-      setSubjects(deptSubjects || []);
-      // gather videos
+      let visibleSubjects = deptSubjects;
+      if (user?.role === 'user') {
+        visibleSubjects = (deptSubjects || []).filter((s: any) => Array.isArray(s.students) && s.students.includes(user.id));
+      }
+      setSubjects(visibleSubjects || []);
+      // gather videos only from visible subjects
       const deptVideos: any[] = [];
-      (deptSubjects || []).forEach((s: any) => {
+      (visibleSubjects || []).forEach((s: any) => {
         (s.videos || []).forEach((v: any) => deptVideos.push({ ...v, subjectName: s.name, subjectId: s.id }));
       });
       setVideos(deptVideos);
       // try load assignments for this department
       try {
-        const ares = await fetch(`/api/assignments?departmentId=${deptId}`, { cache: 'no-store' });
+        const ares = await fetch(`/api/assignments?departmentId=${deptId}`, { cache: 'no-store', credentials: 'include' });
         if (ares.ok) {
           const abody = await ares.json();
           setAssignments(abody.assignments || []);
@@ -174,7 +186,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       }
       // load users for this department (for department managers)
       try {
-        const ures = await fetch('/api/admin/users', { cache: 'no-store' });
+        const ures = await fetch('/api/admin/users', { cache: 'no-store', credentials: 'include' });
         if (ures.ok) {
           const ubody = await ures.json();
           setUsers(ubody.users || []);
@@ -293,6 +305,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     try {
       const res = await fetch('/api/admin/users', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: userId, name, role, password, departmentId: departmentId || null }),
       });
@@ -320,7 +333,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     if (user?.role !== 'admin' && user?.role !== 'department_manager') return;
     if (!confirm('هل تريد حذف هذا المستخدم؟')) return;
     try {
-      const res = await fetch(`/api/admin/users?id=${encodeURIComponent(userId)}`, { method: 'DELETE' });
+      const res = await fetch(`/api/admin/users?id=${encodeURIComponent(userId)}`, { method: 'DELETE', credentials: 'include' });
       if (res.ok) {
         if (user?.role === 'admin') {
           loadData();
@@ -335,7 +348,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
   // Update teacher department
   const handleUpdateTeacher = async (teacherId: string, updates: any) => {
-    if (user?.role !== 'admin') return;
+    if (user?.role !== 'admin' && user?.role !== 'department_manager') return;
     try {
       const res = await fetch(`/api/admin/users`, {
         method: 'PUT',
@@ -435,6 +448,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       const res = await fetch('/api/videos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ title, url, description, departmentId: user.departmentId, subjectId }),
       });
       if (res.ok) loadDepartmentData(user.departmentId);
@@ -602,11 +616,24 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     }
   };
 
-  const openNotifModal = (opts?: { openTab?: 'send' | 'messages' | 'notifications'; onlyForCurrentUser?: boolean }) => {
+  const openNotifModal = async (opts?: { openTab?: 'send' | 'messages' | 'notifications'; onlyForCurrentUser?: boolean }) => {
     try {
-      const rawMsgs = typeof window !== 'undefined' ? localStorage.getItem('app_messages') || '[]' : '[]';
+      let msgs: any[] = [];
+      // try server first
+      try {
+        const resp = await fetch('/api/messages', { credentials: 'include' });
+        if (resp.ok) {
+          const body = await resp.json();
+          msgs = body.messages || [];
+        } else {
+          const raw = typeof window !== 'undefined' ? localStorage.getItem('app_messages') || '[]' : '[]';
+          msgs = JSON.parse(raw) || [];
+        }
+      } catch (e) {
+        const raw = typeof window !== 'undefined' ? localStorage.getItem('app_messages') || '[]' : '[]';
+        try { msgs = JSON.parse(raw) || []; } catch { msgs = []; }
+      }
       const rawNot = typeof window !== 'undefined' ? localStorage.getItem('app_notifications') || '[]' : '[]';
-      const msgs = JSON.parse(rawMsgs);
       const nots = JSON.parse(rawNot);
       // If opening messages from dashboard, show unread messages only for current user
       try {
@@ -667,11 +694,12 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   
   useEffect(() => {
     if (!user) return;
-    if (user.role === 'admin') {
-      // load graduation projects for admin
+    if (user.role === 'admin' || user.role === 'department_manager') {
+      // load graduation projects for admin and department managers (dept managers get only their dept)
       (async () => {
         try {
-          const res = await fetch('/api/graduation_projects');
+          const url = user.role === 'department_manager' && user.departmentId ? `/api/graduation_projects?departmentId=${encodeURIComponent(user.departmentId)}` : '/api/graduation_projects';
+          const res = await fetch(url);
           if (res.ok) {
             const body = await res.json();
             setGraduationProjects(body.projects || []);
@@ -685,7 +713,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
   const loadGraduationProjects = async () => {
     try {
-      const res = await fetch('/api/graduation_projects');
+      const res = await fetch('/api/graduation_projects', { credentials: 'include' });
       if (res.ok) {
         const body = await res.json();
         setGraduationProjects(body.projects || []);
@@ -778,7 +806,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       return users.filter(u => {
         const sameDept = u.departmentId && u.departmentId === user.departmentId;
         const isStudent = u.role === 'user' && sameDept;
-        const isDoctor = (u.role === 'teacher' || u.role === 'department_manager') && sameDept;
+        const isDoctor = u.role === 'teacher' && sameDept; // exclude other department_manager users
         return isStudent || isDoctor;
       }).filter(s => 
         (s.id || '').includes(searchTerm) || 
@@ -795,6 +823,63 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   async function logout() {
     await fetch('/api/logout', { method: 'POST' });
     router.push('/login');
+  }
+
+  function openEditUser(userObj: any) {
+    setEditingUser(userObj);
+    setEditForm({ name: userObj.name || '', newId: userObj.id || '', password: '' });
+  }
+
+  function closeEditUser() {
+    setEditingUser(null);
+    setEditForm({ name: '', newId: '', password: '' });
+  }
+
+  async function handleSaveUser() {
+    if (!editingUser) return;
+    const payload: any = { id: editingUser.id };
+    if ((editForm.newId || '').trim() && editForm.newId !== editingUser.id) payload.newId = (editForm.newId || '').trim();
+    if ((editForm.name || '').trim()) payload.name = (editForm.name || '').trim();
+    if ((editForm.password || '').trim()) payload.password = (editForm.password || '').trim();
+
+    try {
+      const res = await fetch('/api/admin/users', { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (!data || !data.ok) {
+        setToast({ type: 'error', message: data?.error || 'خطأ أثناء التعديل' });
+        return;
+      }
+      // Update local users state
+      setUsers(prev => prev.map(u => u.id === editingUser.id ? { ...u, ...data.user } : u));
+      setToast({ type: 'success', message: 'تم حفظ التعديلات' });
+      closeEditUser();
+    } catch (err) {
+      console.error('Failed to save user edit:', err);
+      setToast({ type: 'error', message: 'فشل الاتصال بالخادم' });
+    }
+  }
+
+  async function handleAddStudentToSubject() {
+    if (!addStudentSubjectId || !addStudentId) {
+      setToast({ type: 'error', message: 'اختر المادة والطالب' });
+      return;
+    }
+    try {
+      const res = await fetch(`/api/subjects/${encodeURIComponent(addStudentSubjectId)}`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ addStudent: addStudentId }) });
+      const data = await res.json();
+      if (!data || !data.ok) {
+        setToast({ type: 'error', message: data?.error || 'فشل إضافة الطالب' });
+        return;
+      }
+      setSubjects(prev => prev.map(s => s.id === data.subject.id ? data.subject : s));
+      setToast({ type: 'success', message: 'تمت إضافة الطالب للمادة' });
+      setShowAddStudentModal(false);
+      setAddStudentSubjectId(null);
+      setAddStudentId(null);
+    } catch (e) {
+      console.error('add student error', e);
+      setToast({ type: 'error', message: 'فشل الاتصال بالخادم' });
+    }
   }
 
   if (loading) {
@@ -822,6 +907,56 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
           borderRadius: 6,
           boxShadow: '0 2px 6px rgba(0,0,0,0.2)'
         }}>{toast.message}</div>
+      )}
+
+      {showAddStudentModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000 }}>
+          <div style={{ background: 'white', padding: 18, borderRadius: 8, width: 520, maxWidth: '95%', direction: 'rtl' }}>
+            <button onClick={() => { setShowAddStudentModal(false); setAddStudentSubjectId(null); setAddStudentId(null); }} style={{ position: 'absolute', left: 12, top: 12, fontSize: 20, border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
+            <h3 style={{ marginTop: 0 }}>إضافة طالب للمادة</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <label>اختر المادة (أنت مدرسها)</label>
+              <select value={addStudentSubjectId || ''} onChange={(e) => setAddStudentSubjectId(e.target.value || null)} style={{ padding: 8, borderRadius: 4, border: '1px solid #ccc' }}>
+                <option value="">-- اختر المادة --</option>
+                {subjects.filter(s => s.teacherId === user?.id).map((s: any) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+
+              <label>اختر الطالب</label>
+              <select value={addStudentId || ''} onChange={(e) => setAddStudentId(e.target.value || null)} style={{ padding: 8, borderRadius: 4, border: '1px solid #ccc' }}>
+                <option value="">-- اختر الطالب --</option>
+                {users.filter(u => u.role === 'user' && String(u.departmentId) === String(user?.departmentId)).map((st: any) => (
+                  <option key={st.id} value={st.id}>{st.name || st.id}</option>
+                ))}
+              </select>
+
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
+                <button onClick={() => { setShowAddStudentModal(false); setAddStudentSubjectId(null); setAddStudentId(null); }} style={{ padding: '8px 12px', borderRadius: 4, border: '1px solid #ccc', background: '#fff' }}>إلغاء</button>
+                <button onClick={handleAddStudentToSubject} style={{ padding: '8px 12px', borderRadius: 4, border: 'none', background: '#1976d2', color: '#fff' }}>إضافة</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {editingUser && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000 }}>
+          <div style={{ background: 'white', padding: 20, borderRadius: 8, width: 460, maxWidth: '95%' }}>
+            <h3 style={{ marginTop: 0 }}>تعديل المستخدم</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <label>الاسم</label>
+              <input value={editForm.name} onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))} style={{ padding: '8px', border: '1px solid #ccc', borderRadius: 4 }} />
+              <label>اسم المستخدم</label>
+              <input value={editForm.newId} onChange={(e) => setEditForm(prev => ({ ...prev, newId: e.target.value }))} style={{ padding: '8px', border: '1px solid #ccc', borderRadius: 4 }} />
+              <label>الرمز (كلمة المرور)</label>
+              <input type="password" value={editForm.password} onChange={(e) => setEditForm(prev => ({ ...prev, password: e.target.value }))} placeholder="اتركه فارغًا إن لم يتغير" style={{ padding: '8px', border: '1px solid #ccc', borderRadius: 4 }} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+              <button onClick={closeEditUser} style={{ padding: '8px 12px', borderRadius: 4, border: '1px solid #ccc', background: '#fff' }}>إلغاء</button>
+              <button onClick={handleSaveUser} style={{ padding: '8px 12px', borderRadius: 4, border: 'none', background: '#1976d2', color: '#fff' }}>حفظ</button>
+            </div>
+          </div>
+        </div>
       )}
       <nav className={styles.navbar}>
         <div className={styles.navContent}>
@@ -887,7 +1022,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                         <h4>إدارة الفيديوهات</h4>
                       </div>
                       <div className={styles.cardItemActions}>
-                        <p onClick={(e) => {e.stopPropagation(); setAddModalType('video')}}>إضافة درس</p>
+                        <p onClick={(e) => { e.stopPropagation(); (async () => { if (user?.departmentId) await loadDepartmentData(user.departmentId); setAddModalType('video'); })(); }}>إضافة درس</p>
                         <p onClick={(e) => {e.stopPropagation(); setViewModalType('videos')}}>عرض الدروس ({filteredVideos.length})</p>
                       </div>
                     </div>
@@ -990,6 +1125,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                                 الدور: {u.role === 'admin' ? 'مسؤول النظام' : u.role === 'department_manager' ? 'مدير القسم' : u.role === 'teacher' ? 'دكتور' : 'طالب'}
                               </p>
                               <div className={styles.cardActions}>
+                                <button onClick={() => openEditUser(u)} className={styles.editBtn} style={{ marginRight: 8, padding: '6px 10px', background: '#1976d2', color: 'white', border: 'none', borderRadius: 4 }}>تعديل</button>
                                 <button 
                                   onClick={() => handleDeleteUser(u.id)}
                                   className={styles.deleteBtn}
@@ -1374,23 +1510,74 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
                   </>
                 ) : (
-                  <>
-                    <p>مرحباً بك في منصة الكلية</p>
-                    <div className={styles.userFeatures}>
-                      <div className={styles.feature}>
-                        <h3>الأقسام الخاصة بك</h3>
-                        <p>عرض جميع الأقسام والمواد المتاحة لك</p>
+                  user.role === 'teacher' ? (
+                    <>
+                      <h3>إدارة المقرر</h3>
+                      <div className={styles.cardGrid}>
+                        <div className={styles.cardItem}>
+                          <div className={styles.cardItemContent}>
+                            <img src="../src/svg/video.svg" alt="الدروس" />
+                            <h4>ادارة الدروس</h4>
+                          </div>
+                          <div className={styles.cardItemActions}>
+                            <p onClick={(e) => { e.stopPropagation(); setViewModalType('videos'); }}>عرض الدروس ({videos.filter(v => subjects.find(s=>s.id===v.subjectId && s.teacherId === user.id)).length})</p>
+                            <p onClick={(e) => { e.stopPropagation(); (async () => { if (user?.departmentId) await loadDepartmentData(user.departmentId); setAddModalType('video'); })(); }}>إضافة درس</p>
+                          </div>
+                        </div>
+
+                        <div className={styles.cardItem}>
+                          <div className={styles.cardItemContent}>
+                            <img src="../src/svg/assignment.svg" alt="الواجبات" />
+                            <h4>ادارة الواجبات</h4>
+                          </div>
+                          <div className={styles.cardItemActions}>
+                            <p onClick={(e) => { e.stopPropagation(); setViewModalType('assignments'); }}>عرض الواجبات ({assignments.filter(a => a.teacherId === user.id || subjects.find(s=>s.id===a.subjectId && s.teacherId===user.id)).length})</p>
+                            <p onClick={(e) => { e.stopPropagation(); setAddModalType('assignment'); }}>إضافة واجب</p>
+                          </div>
+                        </div>
+
+                        <div className={styles.cardItem}>
+                          <div className={styles.cardItemContent}>
+                            <img src="../src/svg/notification.svg" alt="التنبيهات" />
+                            <h4>التنبيهات</h4>
+                          </div>
+                          <div className={styles.cardItemActions}>
+                            <p onClick={(e) => { e.stopPropagation(); openNotifModal({ openTab: 'messages' }); }}>الرسائل {unreadMessagesCount > 0 ? `(${unreadMessagesCount})` : ''}</p>
+                            <p onClick={(e) => { e.stopPropagation(); openNotifModal({ openTab: 'notifications', onlyForCurrentUser: true }); }}>التنبيهات {unreadNotificationsCount > 0 ? `(${unreadNotificationsCount})` : ''}</p>
+                          </div>
+                        </div>
+
+                        <div className={styles.cardItem}>
+                          <div className={styles.cardItemContent}>
+                            <img src="../src/svg/student.svg" alt="اضافة طلاب" />
+                            <h4>اضافة طلاب للمادة</h4>
+                          </div>
+                          <div className={styles.cardItemActions}>
+                            <p onClick={(e) => { e.stopPropagation(); (async () => { if (user?.departmentId) await loadDepartmentData(user.departmentId); setShowAddStudentModal(true); })(); }}>اضافة طالب</p>
+                            <p onClick={(e) => { e.stopPropagation(); setViewModalType('subjects'); }}>عرض المواد التي تدرسها ({subjects.filter(s => s.teacherId === user.id).length})</p>
+                          </div>
+                        </div>
                       </div>
-                      <div className={styles.feature}>
-                        <h3>المواد الدراسية</h3>
-                        <p>الوصول إلى جميع المواد والمحاضرات</p>
+                    </>
+                  ) : (
+                    <>
+                      <p>مرحباً بك في منصة الكلية</p>
+                      <div className={styles.userFeatures}>
+                        <div className={styles.feature}>
+                          <h3>الأقسام الخاصة بك</h3>
+                          <p>عرض جميع الأقسام والمواد المتاحة لك</p>
+                        </div>
+                        <div className={styles.feature}>
+                          <h3>المواد الدراسية</h3>
+                          <p>الوصول إلى جميع المواد والمحاضرات</p>
+                        </div>
+                        <div className={styles.feature}>
+                          <h3>الفيديوهات التعليمية</h3>
+                          <p>مشاهدة الفيديوهات الشرح والمحاضرات</p>
+                        </div>
                       </div>
-                      <div className={styles.feature}>
-                        <h3>الفيديوهات التعليمية</h3>
-                        <p>مشاهدة الفيديوهات الشرح والمحاضرات</p>
-                      </div>
-                    </div>
-                  </>
+                    </>
+                  )
                 )}
               </div>
             </>
@@ -1398,7 +1585,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
         </div>
       </main>
 
-      {selectedVideo && (
+      {selectedVideo && viewModalType !== 'videos' && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
           <div style={{ background: 'white', padding: '16px', maxWidth: '900px', width: '90%', borderRadius: 8, position: 'relative', direction: 'rtl' }}>
             <button onClick={closeVideo} style={{ position: 'absolute', left: 8, top: 8, fontSize: 20, border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
@@ -1500,9 +1687,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             <h2 style={{ marginTop: 0, marginBottom: 12 }}>إرسال تنبيه</h2>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
               <button onClick={() => setNotifView('send')} style={{ padding: '8px 12px', background: notifView === 'send' ? '#1976d2' : '#e0e0e0', color: notifView === 'send' ? 'white' : 'black', border: 'none', borderRadius: 6, cursor: 'pointer' }}>إرسال</button>
-              <button onClick={() => { try { const rawMsgs = typeof window !== 'undefined' ? localStorage.getItem('app_messages') || '[]' : '[]'; setSentMessages(Array.isArray(JSON.parse(rawMsgs)) ? JSON.parse(rawMsgs) : []); } catch(e){ setSentMessages([]);} setNotifView('messages'); }} style={{ padding: '8px 12px', background: notifView === 'messages' ? '#1976d2' : '#e0e0e0', color: notifView === 'messages' ? 'white' : 'black', border: 'none', borderRadius: 6, cursor: 'pointer' }}>الرسائل المرسلة</button>
-              <button onClick={() => { try { const rawNot = typeof window !== 'undefined' ? localStorage.getItem('app_notifications') || '[]' : '[]'; setSentNotifications(Array.isArray(JSON.parse(rawNot)) ? JSON.parse(rawNot) : []); } catch(e){ setSentNotifications([]);} setNotifView('notifications'); }} style={{ padding: '8px 12px', background: notifView === 'notifications' ? '#1976d2' : '#e0e0e0', color: notifView === 'notifications' ? 'white' : 'black', border: 'none', borderRadius: 6, cursor: 'pointer' }}>التنبيهات المرسلة</button>
-
+              <button onClick={async () => { try { const res = await fetch('/api/messages'); if (res.ok) { const body = await res.json(); setSentMessages(body.messages || []); } else { const raw = typeof window !== 'undefined' ? localStorage.getItem('app_messages') || '[]' : '[]'; setSentMessages(Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : []); } } catch (e) { try { const raw = typeof window !== 'undefined' ? localStorage.getItem('app_messages') || '[]' : '[]'; setSentMessages(Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : []); } catch { setSentMessages([]); } } setNotifView('messages'); }} style={{ padding: '8px 12px', background: notifView === 'messages' ? '#1976d2' : '#e0e0e0', color: notifView === 'messages' ? 'white' : 'black', border: 'none', borderRadius: 6, cursor: 'pointer' }}>الرسائل المرسلة</button>
             </div>
 
             {notifView === 'send' ? (
@@ -1546,7 +1731,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
                 <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-start' }}>
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       if (!notifMessage.trim()) { showToast('اكتب نص الرسالة', 'error'); return; }
                       try {
                         if (notifMode === 'notification') {
@@ -1575,12 +1760,29 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                             message: notifMessage.trim(),
                             date: new Date().toISOString(),
                           };
-                          const raw = localStorage.getItem('app_messages') || '[]';
-                          const arr = JSON.parse(raw);
-                          if (!Array.isArray(arr)) arr.length = 0;
-                          arr.unshift(msg);
-                          localStorage.setItem('app_messages', JSON.stringify(arr));
-                          setSentMessages(prev => [msg, ...prev]);
+                          try {
+                            const res = await fetch('/api/messages', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(msg) });
+                            if (res.ok) {
+                              const body = await res.json();
+                              const saved = body.message || body;
+                              setSentMessages(prev => [saved, ...prev]);
+                            } else {
+                              // fallback to localStorage
+                              const raw = typeof window !== 'undefined' ? localStorage.getItem('app_messages') || '[]' : '[]';
+                              const arr = JSON.parse(raw);
+                              if (!Array.isArray(arr)) arr.length = 0;
+                              arr.unshift(msg);
+                              localStorage.setItem('app_messages', JSON.stringify(arr));
+                              setSentMessages(prev => [msg, ...prev]);
+                            }
+                          } catch (e) {
+                            const raw = typeof window !== 'undefined' ? localStorage.getItem('app_messages') || '[]' : '[]';
+                            const arr = JSON.parse(raw);
+                            if (!Array.isArray(arr)) arr.length = 0;
+                            arr.unshift(msg);
+                            localStorage.setItem('app_messages', JSON.stringify(arr));
+                            setSentMessages(prev => [msg, ...prev]);
+                          }
                           // refresh counts and mark this message as unread for current user
                           try {
                             // small delay to ensure storage is written
@@ -1695,6 +1897,24 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             )}
             {viewModalType === 'videos' && (
               <div>
+                {selectedVideo && (
+                  <div style={{ marginBottom: 12, border: '1px solid #e0e0e0', padding: 12, borderRadius: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                      <h3 style={{ margin: 0 }}>{selectedVideo.video.title}</h3>
+                      <div>
+                        <button onClick={() => setSelectedVideo(null)} style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #ccc', background: '#fff' }}>إغلاق</button>
+                      </div>
+                    </div>
+                    <div style={{ marginTop: 8 }}>
+                      {getYoutubeEmbedUrl(selectedVideo.video.url) ? (
+                        <iframe src={getYoutubeEmbedUrl(selectedVideo.video.url) || ''} width="100%" height={360} frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                      ) : (
+                        <a href={selectedVideo.video.url} target="_blank" rel="noreferrer">افتح الفيديو في نافذة جديدة</a>
+                      )}
+                    </div>
+                    <p style={{ marginTop: 8 }}>{selectedVideo.video.description}</p>
+                  </div>
+                )}
                 {filteredVideos.length === 0 ? (
                   <p>لا توجد دروس</p>
                 ) : (
@@ -1771,12 +1991,14 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                             <p style={{ fontSize: 12, color: '#666', margin: '0 0 6px 0' }}>تم الرفع: {p.uploadedAt ? new Date(p.uploadedAt).toLocaleString() : ''}</p>
                             <p style={{ fontSize: 12, color: '#666', margin: '0 0 8px 0' }}>القسم: {departments.find((d: any) => d.id === p.departmentId)?.name || 'عام'}</p>
                             <div style={{ display: 'flex', gap: 8 }}>
-                              <a href={p.url} target="_blank" rel="noreferrer" style={{ padding: '6px 10px', background: '#1976d2', color: 'white', borderRadius: 4, textDecoration: 'none' }}>تحميل / عرض</a>
-                              {user.role === 'admin' && (
+                              {(user.role === 'admin' || (user.role === 'department_manager' && String(p.departmentId) === String(user.departmentId))) && (
+                                <a href={p.url} target="_blank" rel="noreferrer" style={{ padding: '6px 10px', background: '#1976d2', color: 'white', borderRadius: 4, textDecoration: 'none' }}>تحميل / عرض</a>
+                              )}
+                              {(user.role === 'admin' || (user.role === 'department_manager' && String(p.departmentId) === String(user.departmentId))) && (
                                 <button onClick={async () => {
                                   if (!confirm('هل تريد حذف هذا المشروع؟')) return;
                                   try {
-                                    const res = await fetch(`/api/graduation_projects?id=${encodeURIComponent(p.id)}`, { method: 'DELETE' });
+                                    const res = await fetch(`/api/graduation_projects?id=${encodeURIComponent(p.id)}`, { method: 'DELETE', credentials: 'include' });
                                     if (res.ok) {
                                       setGraduationProjects(prev => prev.filter(pr => pr.id !== p.id));
                                       showToast('تم حذف المشروع', 'success');
@@ -1892,7 +2114,10 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                             <p style={{ color: '#666', fontSize: '12px', margin: '0 0 5px 0' }}>المستخدم: {student.id}</p>
                             {student.departmentId && <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>القسم: {dept ? dept.name : 'غير محدد'}</p>}
                             <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>الدور: {student.role === 'admin' ? 'مسؤول النظام' : student.role === 'department_manager' ? 'مدير القسم' : student.role === 'teacher' ? 'دكتور' : 'طالب'}</p>
-                            <button onClick={() => handleDeleteUser(student.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button onClick={() => openEditUser(student)} style={{ padding: '4px 8px', fontSize: '12px', background: '#1976d2', color: 'white', border: 'none', borderRadius: '4px' }}>تعديل</button>
+                              <button onClick={() => handleDeleteUser(student.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
+                            </div>
                           </div>
                         );
                       })}
@@ -2010,10 +2235,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                                 الدور: {u.role === 'user' ? 'طالب' : u.role === 'teacher' ? 'دكتور' : u.role === 'department_manager' ? 'مدير القسم' : u.role === 'admin' ? 'مسؤول النظام' : u.role}
                               </p>
                               <div style={{ display: 'flex', gap: '6px' }}>
-                                <button onClick={() => {
-                                  const newName = prompt('الاسم الجديد:', u.name || u.id);
-                                  if (newName) handleUpdateTeacher(u.id, { name: newName });
-                                }} style={{ padding: '4px 8px', fontSize: '12px' }}>تعديل</button>
+                                <button onClick={() => openEditUser(u)} style={{ padding: '4px 8px', fontSize: '12px', background: '#1976d2', color: 'white', border: 'none', borderRadius: '4px' }}>تعديل</button>
                                 <button onClick={() => handleDeleteUser(u.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
                               </div>
                             </div>

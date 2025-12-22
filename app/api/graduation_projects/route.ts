@@ -2,13 +2,29 @@ import fs from 'fs';
 import path from 'path';
 import { NextResponse } from 'next/server';
 
+function canManageDept(req: Request, deptId: string | null): boolean {
+  const cookie = req.headers.get('cookie') || '';
+  const m = cookie.split(';').map(s => s.trim()).find(s => s.startsWith('auth='));
+  if (!m) return false;
+  try {
+    const token = m.split('=')[1];
+    const payload = JSON.parse(Buffer.from(token, 'base64').toString('utf8'));
+    return payload.role === 'admin' || (payload.role === 'department_manager' && String(payload.departmentId) === String(deptId));
+  } catch (e) { return false }
+}
+
 const DATA_FILE = path.join(process.cwd(), 'data', 'graduation_projects.json');
 const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads', 'graduation');
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const url = new URL(req.url);
+    const departmentId = url.searchParams.get('departmentId');
     const raw = await fs.promises.readFile(DATA_FILE, 'utf-8').catch(() => '[]');
-    const projects = JSON.parse(raw || '[]');
+    let projects = JSON.parse(raw || '[]');
+    if (departmentId) {
+      projects = (projects || []).filter((p: any) => String(p.departmentId) === String(departmentId));
+    }
     return NextResponse.json({ projects });
   } catch (e) {
     return new Response('خطأ في جلب المشاريع', { status: 500 });
@@ -71,6 +87,8 @@ export async function DELETE(req: Request) {
     const idx = projects.findIndex((p: any) => String(p.id) === String(id));
     if (idx === -1) return new Response('المشروع غير موجود', { status: 404 });
     const proj = projects[idx];
+    // authorization: only admin or department_manager of same dept can delete
+    if (!canManageDept(req, proj.departmentId)) return new Response('غير مسموح', { status: 401 });
     // remove file if exists
     if (proj && proj.filename) {
       const filePath = path.join(UPLOAD_DIR, proj.filename);

@@ -1,28 +1,28 @@
 import { NextResponse } from 'next/server';
 import { readUsersFile, writeUsersFile } from '../../../lib/users';
 
-function canManageDept(req: Request, deptId: string): boolean {
+function parseAuth(req: Request) {
   const cookie = req.headers.get('cookie') || '';
   const m = cookie.split(';').map(s=>s.trim()).find(s=>s.startsWith('auth='));
-  if (!m) return false;
-  try {
-    const token = m.split('=')[1];
-    const payload = JSON.parse(Buffer.from(token, 'base64').toString('utf8'));
-    return payload.role === 'admin' || (payload.role === 'department_manager' && payload.departmentId === deptId);
-  } catch(e) { return false }
+  if (!m) return null;
+  try { const token = m.split('=')[1]; return JSON.parse(Buffer.from(token, 'base64').toString('utf8')); } catch(e) { return null }
 }
 
 export async function POST(req: Request) {
   const body = await req.json();
-  if (!canManageDept(req, body.departmentId)) return NextResponse.json({ ok: false }, { status: 401 });
-  
   const data = readUsersFile();
   const dept = (data.departments || []).find((d: any) => d.id === body.departmentId);
   if (!dept) return NextResponse.json({ ok: false, error: 'Department not found' }, { status: 404 });
-  
   const subject = (dept.subjects || []).find((s: any) => s.id === body.subjectId);
   if (!subject) return NextResponse.json({ ok: false, error: 'Subject not found' }, { status: 404 });
-  
+
+  const payload = parseAuth(req);
+  if (!payload) return NextResponse.json({ ok: false }, { status: 401 });
+  const allowed = payload.role === 'admin' ||
+    (payload.role === 'department_manager' && payload.departmentId === body.departmentId) ||
+    (payload.role === 'teacher' && payload.id === subject.teacherId);
+  if (!allowed) return NextResponse.json({ ok: false }, { status: 401 });
+
   const video = {
     id: Date.now().toString(),
     title: body.title,
