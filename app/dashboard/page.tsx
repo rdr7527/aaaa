@@ -1421,9 +1421,40 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
           <div style={{ background: 'white', padding: '20px', maxWidth: '600px', width: '90%', borderRadius: 8, position: 'relative', direction: 'rtl' }}>
             <button onClick={() => setAddModalType(null)} style={{ position: 'absolute', left: 8, top: 8, fontSize: 20, border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
             <h2 style={{ marginTop: 0, marginBottom: 16 }}>
-              {addModalType === 'subject' ? 'إضافة مادة جديدة' : addModalType === 'video' ? 'إضافة درس جديد' : addModalType === 'assignment' ? 'إضافة واجب جديد' : addModalType === 'department' ? 'إضافة قسم جديد' : 'إضافة طالب جديد'}
+              {addModalType === 'subject' ? 'إضافة مادة جديدة' : addModalType === 'video' ? 'إضافة درس جديد' : addModalType === 'assignment' ? 'إضافة واجب جديد' : addModalType === 'department' ? 'إضافة قسم جديد' : addModalType === 'book' ? 'إضافة رابط كتاب' : 'إضافة طالب جديد'}
             </h2>
-            
+
+            {addModalType === 'subject' && (
+              <AddSubjectForm departments={departments} teachers={teachers} onAdd={(name, desc, deptId, teacherId) => { handleAddSubject(name, desc, user.departmentId || deptId, teacherId); setAddModalType(null); }} user={user} />
+            )}
+
+            {addModalType === 'video' && (
+              <AddVideoForm subjects={subjects} onAdd={(title, url, desc, subjectId) => { handleAddVideo(title, url, desc, subjectId); setAddModalType(null); }} />
+            )}
+
+            {addModalType === 'assignment' && (
+              <AddAssignmentForm onAdd={(title, question, answerType, options, correctAnswer, dueDate) => { handleAddAssignment(title, question, answerType, options, correctAnswer, dueDate); setAddModalType(null); }} />
+            )}
+
+            {addModalType === 'department' && (
+              <AddDepartmentForm onAdd={(name, description) => { handleAddDept(name, description); setAddModalType(null); }} />
+            )}
+
+            {addModalType === 'book' && (
+              <div>
+                <h3>إضافة رابط كتاب</h3>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  const formData = new FormData(e.target as HTMLFormElement);
+                  const title = formData.get('title') as string;
+                  const url = formData.get('url') as string;
+                  const departmentId = formData.get('departmentId') as string;
+                  if (title && url && departmentId) {
+                    handleAddBook(title, url, departmentId);
+                    setAddModalType(null);
+                  }
+                }}>
+                  <div style={{ marginBottom: '10px' }}>
                     <label>عنوان الكتاب</label>
                     <input name="title" type="text" required style={{ width: '100%', padding: '8px', marginTop: '5px' }} />
                   </div>
@@ -1443,6 +1474,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                 </form>
               </div>
             )}
+
             {addModalType === 'student' && (
               <AddUserForm
                 departments={departments}
@@ -1456,6 +1488,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                 defaultDepartmentId={user?.departmentId}
               />
             )}
+
           </div>
         </div>
       )}
