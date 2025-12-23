@@ -46,7 +46,7 @@ export default function AdminPanel() {
           setDepartments(deptData.departments || []);
         }
         
-        const usersRes = await fetch('/api/admin/users');
+        const usersRes = await fetch('/api/admin/users?page=1&limit=50');
         if (usersRes.ok) {
           const usersData = await usersRes.json();
           setUsers(usersData.users || []);

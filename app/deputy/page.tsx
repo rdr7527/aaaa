@@ -39,7 +39,7 @@ export default function DeputyPanel() {
           setDepartment(d.department || null);
         }
 
-        const usersRes = await fetch('/api/admin/users');
+        const usersRes = await fetch('/api/admin/users?page=1&limit=50');
         if (usersRes.ok) {
           const usersData = await usersRes.json();
           setUsers(usersData.users || []);

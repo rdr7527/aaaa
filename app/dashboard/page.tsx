@@ -18,6 +18,10 @@ export default function Dashboard() {
   const [videos, setVideos] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+  const [usersPage, setUsersPage] = useState<number>(1);
+  const [usersLimit] = useState<number>(50);
+  const [usersTotal, setUsersTotal] = useState<number | null>(null);
+  const [usersLoadingMore, setUsersLoadingMore] = useState<boolean>(false);
   const [books, setBooks] = useState<any[]>([]);
   const [showAddAssignment, setShowAddAssignment] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -30,6 +34,7 @@ export default function Dashboard() {
   const [modalUserFilter, setModalUserFilter] = useState('all');
   const [modalStudentsSearchTerm, setModalStudentsSearchTerm] = useState('');
   const [modalStudentsSort, setModalStudentsSort] = useState<'none' | 'name' | 'role'>('none');
+  const [modalStudentsFilter, setModalStudentsFilter] = useState<'all' | 'teacher' | 'user'>('all');
   const [modalDeptSearchTerm, setModalDeptSearchTerm] = useState('');
   const [modalLibrarySearchTerm, setModalLibrarySearchTerm] = useState('');
   const deptListRef = React.useRef<HTMLDivElement | null>(null);
@@ -49,17 +54,18 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   useEffect(() => {
     // run once on mount: fetch current user and load role-specific data
     (async () => {
+        // no client-side caching of sensitive user info; always validate with server
       try {
         const res = await fetch('/api/me', { credentials: 'include' });
         if (res.status === 200) {
           const data = await res.json();
           setUser(data.user);
-          // Load data depending on role
+          // Load data depending on role. pass `data.user` because setUser is async
           if (data.user.role === 'admin') {
-            await loadData();
+            await loadData(data.user);
           } else if (data.user.role === 'department_manager' || data.user.role === 'teacher') {
             if (data.user.departmentId) await loadDepartmentData(data.user.departmentId);
-            else await loadData();
+            else await loadData(data.user);
           } else {
             // non-staff department users go to /department
             if (data.user.departmentId) router.push('/department');
@@ -77,7 +83,22 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     })();
   }, []);
 
-  const loadData = async () => {
+  // Fetch a page of users (server-side pagination)
+  const fetchUsersPage = async (page = 1, append = false) => {
+    try {
+      const res = await fetch(`/api/admin/users?page=${page}&limit=${usersLimit}`, { credentials: 'include' });
+      if (!res.ok) return;
+      const body = await res.json();
+      const newUsers = body.users || [];
+      setUsers(prev => append ? [...prev, ...newUsers] : newUsers);
+      setUsersTotal(typeof body.total === 'number' ? body.total : null);
+      setUsersPage(page);
+    } catch (e) {
+      console.error('خطأ جلب المستخدمين', e);
+    }
+  };
+
+  const loadData = async (currentUser?: any) => {
     try {
       const deptRes = await fetch('/api/departments');
       if (deptRes.ok) {
@@ -86,12 +107,9 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       }
 
       // Admin needs departments, users, and subjects data
-      if (user?.role === 'admin') {
-        const usersRes = await fetch('/api/admin/users');
-        if (usersRes.ok) {
-          const usersData = await usersRes.json();
-          setUsers(usersData.users || []);
-        }
+      const roleToCheck = currentUser?.role || user?.role;
+      if (roleToCheck === 'admin') {
+        await fetchUsersPage(1);
 
         const subjRes = await fetch('/api/subjects');
         if (subjRes.ok) {
@@ -173,10 +191,12 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       }
       // load users for this department (for department managers)
       try {
-        const ures = await fetch('/api/admin/users', { cache: 'no-store', credentials: 'include' });
+        const ures = await fetch(`/api/admin/users?page=1&limit=${usersLimit}`, { cache: 'no-store', credentials: 'include' });
         if (ures.ok) {
           const ubody = await ures.json();
           setUsers(ubody.users || []);
+          setUsersTotal(ubody.total ?? null);
+          setUsersPage(1);
         }
       } catch (e) {
         console.error('خطأ في تحميل المستخدمين', e);
@@ -276,7 +296,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
   // Admin CRUD actions for users
   const handleAddUser = async (userId: string, name: string, role: string, password: string, departmentId?: string): Promise<boolean> => {
-    if (user?.role !== 'admin' && !(user?.role === 'department_manager' && (role === 'user' || role === 'teacher'))) {
+    if (user?.role !== 'admin' && user?.role !== 'department_manager') {
       showToast('لا تملك صلاحية إضافة مستخدم', 'error');
       return false;
     }
@@ -583,17 +603,47 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   const [showDeptSubjectsModal, setShowDeptSubjectsModal] = useState(false);
   const [showAddSubjectModal, setShowAddSubjectModal] = useState(false);
 
-  const refreshNotifCounts = () => {
+  const refreshNotifCounts = async () => {
     try {
-      const rawMsgs = typeof window !== 'undefined' ? localStorage.getItem('app_messages') || '[]' : '[]';
-      const rawNot = typeof window !== 'undefined' ? localStorage.getItem('app_notifications') || '[]' : '[]';
-      const msgs = JSON.parse(rawMsgs) || [];
-      const nots = JSON.parse(rawNot) || [];
+      // try server-side notifications first
+      let msgs: any[] = [];
+      let nots: any[] = [];
+      try {
+        const respMsgs = await fetch('/api/messages');
+        if (respMsgs.ok) {
+          const body = await respMsgs.json();
+          msgs = body.messages || [];
+        }
+      } catch (e) {
+        const raw = typeof window !== 'undefined' ? localStorage.getItem('app_messages') || '[]' : '[]';
+        try { msgs = JSON.parse(raw) || []; } catch { msgs = []; }
+      }
+
+      try {
+        const resp = await fetch('/api/notifications');
+        if (resp.ok) {
+          const body = await resp.json();
+          nots = body.notifications || [];
+        } else {
+          const rawNot = typeof window !== 'undefined' ? localStorage.getItem('app_notifications') || '[]' : '[]';
+          nots = JSON.parse(rawNot) || [];
+        }
+      } catch (e) {
+        const rawNot = typeof window !== 'undefined' ? localStorage.getItem('app_notifications') || '[]' : '[]';
+        try { nots = JSON.parse(rawNot) || []; } catch { nots = []; }
+      }
+
       const readKey = `app_messages_read_${user?.id || ''}`;
       const rawRead = typeof window !== 'undefined' ? localStorage.getItem(readKey) || '[]' : '[]';
       const readIds = JSON.parse(rawRead) || [];
       const unreadMsgs = Array.isArray(msgs) ? msgs.filter((m: any) => !readIds.includes(m.id)).length : 0;
-      const unreadNots = Array.isArray(nots) ? nots.filter((n: any) => String(n.to) === String(user?.id || '') && !n.read).length : 0;
+      const unreadNots = Array.isArray(nots) ? nots.filter((n: any) => {
+        if (n.to === 'all') return !n.read;
+        if (!user) return false;
+        if (String(n.to) === String(user?.id)) return !n.read;
+        if (user.role === 'admin' && String(n.to) === 'admin') return !n.read;
+        return false;
+      }).length : 0;
       setUnreadMessagesCount(unreadMsgs);
       setUnreadNotificationsCount(unreadNots);
     } catch (e) {
@@ -619,8 +669,20 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
         const raw = typeof window !== 'undefined' ? localStorage.getItem('app_messages') || '[]' : '[]';
         try { msgs = JSON.parse(raw) || []; } catch { msgs = []; }
       }
-      const rawNot = typeof window !== 'undefined' ? localStorage.getItem('app_notifications') || '[]' : '[]';
-      const nots = JSON.parse(rawNot);
+      let nots: any[] = [];
+      try {
+        const respNot = await fetch('/api/notifications');
+        if (respNot.ok) {
+          const body = await respNot.json();
+          nots = body.notifications || [];
+        } else {
+          const rawNot = typeof window !== 'undefined' ? localStorage.getItem('app_notifications') || '[]' : '[]';
+          nots = JSON.parse(rawNot) || [];
+        }
+      } catch (e) {
+        const rawNot = typeof window !== 'undefined' ? localStorage.getItem('app_notifications') || '[]' : '[]';
+        try { nots = JSON.parse(rawNot) || []; } catch { nots = []; }
+      }
       // If opening messages from dashboard, show unread messages only for current user
       try {
         const readKey = `app_messages_read_${user?.id || ''}`;
@@ -640,11 +702,20 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       }
 
       if (opts?.openTab === 'notifications' && opts?.onlyForCurrentUser) {
-        const filtered = Array.isArray(nots) ? nots.filter((n: any) => String(n.to) === String(user?.id || '')) : [];
-        // mark those notifications as read
+        const filtered = Array.isArray(nots) ? nots.filter((n: any) => {
+          if (n.to === 'all') return true;
+          if (!user) return false;
+          if (String(n.to) === String(user?.id)) return true;
+          if (user.role === 'admin' && String(n.to) === 'admin') return true;
+          return false;
+        }) : [];
+        // mark those notifications as read locally
         try {
           const allNots = Array.isArray(nots) ? nots : [];
-          allNots.forEach((n: any) => { if (String(n.to) === String(user?.id || '')) n.read = true; });
+          allNots.forEach((n: any) => {
+            const match = (n.to === 'all') || (user && (String(n.to) === String(user.id))) || (user && user.role === 'admin' && String(n.to) === 'admin');
+            if (match) n.read = true;
+          });
           if (typeof window !== 'undefined') localStorage.setItem('app_notifications', JSON.stringify(allNots));
         } catch (e) {}
         setSentNotifications(filtered);
@@ -985,7 +1056,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                       </div>
                       <div className={styles.cardItemActions}>
                         <p onClick={(e) => {e.stopPropagation(); setAddModalType('student')}}>إضافة مستخدم جديد</p>
-                        <p onClick={(e) => {e.stopPropagation(); setViewModalType('users')}}>عرض مستخدمين ({filteredUsers.length})</p>
+                        <p onClick={async (e) => {e.stopPropagation(); await loadData(); setViewModalType('users')}}>عرض مستخدمين ({filteredUsers.length})</p>
                       </div>
                     </div>
                   )}
@@ -1490,7 +1561,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                         </div>
                         <div className={styles.cardItemActions}>
                           <p onClick={(e) => { e.stopPropagation(); setAddModalType('student'); }}>إضافة مستخدم</p>
-                          <p onClick={(e) => { e.stopPropagation(); setViewModalType('students'); }}>عرض المستخدمين ({users.filter(u => String(u.departmentId) === String(user.departmentId)).length})</p>
+                          <p onClick={async (e) => { e.stopPropagation(); if (user?.departmentId) await loadDepartmentData(user.departmentId); setViewModalType('students'); }}>عرض المستخدمين ({users.filter(u => String(u.departmentId) === String(user.departmentId)).length})</p>
                         </div>
                       </div>
                     </div>
@@ -1731,12 +1802,29 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                             message: notifMessage.trim(),
                             date: new Date().toISOString(),
                           };
-                          const raw = localStorage.getItem('app_notifications') || '[]';
-                          const arr = JSON.parse(raw);
-                          if (!Array.isArray(arr)) arr.length = 0;
-                          arr.unshift(notif);
-                          localStorage.setItem('app_notifications', JSON.stringify(arr));
-                          setSentNotifications(prev => [notif, ...prev]);
+                          try {
+                            const res = await fetch('/api/notifications', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(notif) });
+                            if (res.ok) {
+                              const body = await res.json();
+                              const saved = body.notification || body;
+                              setSentNotifications(prev => [saved, ...prev]);
+                            } else {
+                              // fallback to localStorage
+                              const raw = typeof window !== 'undefined' ? localStorage.getItem('app_notifications') || '[]' : '[]';
+                              const arr = JSON.parse(raw);
+                              if (!Array.isArray(arr)) arr.length = 0;
+                              arr.unshift(notif);
+                              localStorage.setItem('app_notifications', JSON.stringify(arr));
+                              setSentNotifications(prev => [notif, ...prev]);
+                            }
+                          } catch (e) {
+                            const raw = typeof window !== 'undefined' ? localStorage.getItem('app_notifications') || '[]' : '[]';
+                            const arr = JSON.parse(raw);
+                            if (!Array.isArray(arr)) arr.length = 0;
+                            arr.unshift(notif);
+                            localStorage.setItem('app_notifications', JSON.stringify(arr));
+                            setSentNotifications(prev => [notif, ...prev]);
+                          }
                         } else {
                           const toField = (notifTarget === 'departments' && user?.role === 'department_manager') ? (user.departmentId || 'departments') : notifTarget;
                           const msg = {
@@ -2069,6 +2157,13 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                     </select>
                   )}
                 </div>
+                {user?.role === 'department_manager' && (
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                    <button onClick={() => setModalStudentsFilter('all')} style={{ padding: '6px 12px', fontSize: '14px', background: modalStudentsFilter === 'all' ? '#007bff' : '#f8f9fa', color: modalStudentsFilter === 'all' ? 'white' : 'black', border: '1px solid #ccc', borderRadius: 4 }}>الكل</button>
+                    <button onClick={() => setModalStudentsFilter('teacher')} style={{ padding: '6px 12px', fontSize: '14px', background: modalStudentsFilter === 'teacher' ? '#007bff' : '#f8f9fa', color: modalStudentsFilter === 'teacher' ? 'white' : 'black', border: '1px solid #ccc', borderRadius: 4 }}>دكتور</button>
+                    <button onClick={() => setModalStudentsFilter('user')} style={{ padding: '6px 12px', fontSize: '14px', background: modalStudentsFilter === 'user' ? '#007bff' : '#f8f9fa', color: modalStudentsFilter === 'user' ? 'white' : 'black', border: '1px solid #ccc', borderRadius: 4 }}>الطلاب</button>
+                  </div>
+                )}
 
                 {(() => {
                   const q = (modalStudentsSearchTerm || '').toLowerCase().trim();
@@ -2078,17 +2173,21 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                       return (s.id || '').toString().toLowerCase().includes(q) || (s.name || '').toLowerCase().includes(q) || (s.role || '').toLowerCase().includes(q);
                     });
                   }
+                  if (modalStudentsFilter !== 'all') {
+                    list = list.filter((s: any) => s.role === modalStudentsFilter);
+                  }
                   if (modalStudentsSort === 'name') {
                     list.sort((a: any, b: any) => ( (a.name || a.id || '').toString().localeCompare((b.name || b.id || '').toString()) ));
                   } else if (modalStudentsSort === 'role') {
                     list.sort((a: any, b: any) => ( (a.role || '').toString().localeCompare((b.role || '').toString()) ));
                   }
 
-                  if (list.length === 0) return <p>لا يوجد طلاب</p>;
+                  if (list.length === 0) return <p>لا يوجد مستخدمين</p>;
 
                   return (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
-                      {list.map(student => {
+                    <>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+                        {list.map(student => {
                         const dept = departments.find(d => d.id === student.departmentId);
                         return (
                           <div key={student.id} style={{
@@ -2108,7 +2207,26 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                           </div>
                         );
                       })}
-                    </div>
+                      </div>
+                      {usersTotal && users.length < usersTotal && (
+                        <div style={{ textAlign: 'center', marginTop: 12 }}>
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                setUsersLoadingMore(true);
+                                await fetchUsersPage(usersPage + 1, true);
+                              } finally {
+                                setUsersLoadingMore(false);
+                              }
+                            }}
+                            style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #ccc', background: '#fff' }}
+                          >
+                            {usersLoadingMore ? 'جاري التحميل...' : `تحميل المزيد (${users.length}/${usersTotal})`}
+                          </button>
+                        </div>
+                      )}
+                    </>
                   );
                 })()}
               </div>
@@ -2184,6 +2302,13 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                     className={styles.searchInput}
                     style={{ width: '100%' }}
                   />
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  <button onClick={() => setModalUserFilter('all')} style={{ padding: '6px 12px', fontSize: '14px', background: modalUserFilter === 'all' ? '#007bff' : '#f8f9fa', color: modalUserFilter === 'all' ? 'white' : 'black', border: '1px solid #ccc', borderRadius: 4 }}>الكل</button>
+                  <button onClick={() => setModalUserFilter('admin')} style={{ padding: '6px 12px', fontSize: '14px', background: modalUserFilter === 'admin' ? '#007bff' : '#f8f9fa', color: modalUserFilter === 'admin' ? 'white' : 'black', border: '1px solid #ccc', borderRadius: 4 }}>مسؤول النظام</button>
+                  <button onClick={() => setModalUserFilter('department_manager')} style={{ padding: '6px 12px', fontSize: '14px', background: modalUserFilter === 'department_manager' ? '#007bff' : '#f8f9fa', color: modalUserFilter === 'department_manager' ? 'white' : 'black', border: '1px solid #ccc', borderRadius: 4 }}>مدير القسم</button>
+                  <button onClick={() => setModalUserFilter('teacher')} style={{ padding: '6px 12px', fontSize: '14px', background: modalUserFilter === 'teacher' ? '#007bff' : '#f8f9fa', color: modalUserFilter === 'teacher' ? 'white' : 'black', border: '1px solid #ccc', borderRadius: 4 }}>دكتور</button>
+                  <button onClick={() => setModalUserFilter('user')} style={{ padding: '6px 12px', fontSize: '14px', background: modalUserFilter === 'user' ? '#007bff' : '#f8f9fa', color: modalUserFilter === 'user' ? 'white' : 'black', border: '1px solid #ccc', borderRadius: 4 }}>الطلاب</button>
                 </div>
 
                 {(() => {

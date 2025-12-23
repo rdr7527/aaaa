@@ -12,8 +12,8 @@ export async function GET(req: Request) {
     const data = readUsersFile();
     const stored = (data.users || []).find((u: any) => u.id === payload.id);
     const merged = { ...payload, ...(stored ? { deputyAccess: !!stored.deputyAccess, departmentId: stored.departmentId || payload.departmentId } : {}) };
-    return NextResponse.json({ ok: true, user: merged });
+    return NextResponse.json({ ok: true, user: merged }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (e) {
-    return NextResponse.json({ ok: false }, { status: 401 });
+    return NextResponse.json({ ok: false }, { status: 401, headers: { 'Cache-Control': 'no-store' } });
   }
 }

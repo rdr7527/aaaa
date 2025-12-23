@@ -13,7 +13,13 @@ export async function POST(req: Request) {
     // Create a simple signed token (not JWT) -> HMAC not required for demo; we set cookie with base64 user id
     const token = Buffer.from(JSON.stringify({ id: user.id, role: user.role, departmentId: user.departmentId || null })).toString('base64');
     const res = NextResponse.json({ ok: true, user: { id: user.id, name: user.name, role: user.role, departmentId: user.departmentId || null } });
-    res.headers.set('Set-Cookie', `auth=${token}; HttpOnly; Path=/; Max-Age=${60 * 60 * 24}`);
+    // Build cookie with SameSite and optional Secure in production
+    const maxAge = 60 * 60 * 24; // 1 day
+    const cookieParts = [`auth=${token}`, 'HttpOnly', 'Path=/', `Max-Age=${maxAge}`, 'SameSite=Lax'];
+    if (process.env.NODE_ENV === 'production') cookieParts.push('Secure');
+    res.headers.set('Set-Cookie', cookieParts.join('; '));
+    // prevent caching of login response
+    res.headers.set('Cache-Control', 'no-store');
     return res;
   } catch (err) {
     console.error('Login error:', err);

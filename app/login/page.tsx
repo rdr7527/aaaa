@@ -17,10 +17,19 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      // basic client-side validation
+      if (!username || !username.toString().trim() || !password) {
+        setError('أدخل اسم مستخدم وكلمة مرور صحيحة');
+        setLoading(false);
+        return;
+      }
+      // prefetch dashboard resources to speed up navigation
+      try { router.prefetch('/dashboard'); } catch (e) { /* ignore if not available */ }
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        credentials: 'include',
+        body: JSON.stringify({ username: (username || '').toString().trim(), password }),
       });
 
       const data = await res.json();
@@ -31,7 +40,10 @@ export default function LoginPage() {
         return;
       }
 
-      router.push('/dashboard');
+      // do NOT cache sensitive user info in sessionStorage
+
+      // Replace history (no back) and go to dashboard
+      try { router.replace('/dashboard'); } catch (e) { router.push('/dashboard'); }
     } catch (err) {
       setError('خطأ في الخادم');
       setLoading(false);

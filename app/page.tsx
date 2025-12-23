@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
 export default function Home() {
-  // Redirect root to login page
-  redirect('/login');
+  // Redirect root to the new static home page
+  redirect('/home/index.html');
 }
