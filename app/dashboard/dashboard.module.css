@@ -400,6 +400,73 @@
   padding-bottom: 10px;
 }
 
+/* Student header (right-aligned for RTL) */
+.userHeader {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 12px;
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+  border-left: 1px solid #e6eefb;
+  z-index: 9999;
+  box-shadow: -6px 0 20px rgba(13,71,161,0.04);
+}
+
+.userInfo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.userAvatar {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid rgba(13,71,161,0.06);
+}
+
+.userText { text-align: center; width: 100%; }
+.userName { font-weight: 700; color: #0d47a1; }
+.userDept { font-size: 0.95rem; color: #555; }
+
+.userActions { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 6px; }
+.actionBtn {
+  background: transparent;
+  border: none;
+  padding: 10px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+  color: #0d47a1;
+  width: 100%;
+  text-align: center;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+.actionBtn:hover { background-color: rgba(13,71,161,0.06); }
+
+/* when sidebar present, reserve space for main content */
+.hasUserSidebar .main {
+  margin-right: 300px;
+}
+
+/* responsive: collapse sidebar on small screens */
+@media (max-width: 768px) {
+  .userHeader { position: relative; width: 100%; height: auto; flex-direction: row; justify-content: space-between; padding: 12px; box-shadow: none; border-left: none; }
+  .userInfo { flex-direction: row; align-items: center; text-align: right; }
+  .userText { text-align: right; }
+  .userActions { flex-direction: row; flex-wrap: wrap; gap: 6px; width: auto; }
+  .hasUserSidebar .main { margin-right: 0; }
+}
+
 .tabButton {
   padding: 10px 20px;
   background: #f0f0f0;

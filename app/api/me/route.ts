@@ -11,7 +11,7 @@ export async function GET(req: Request) {
     // Merge latest flags from users file (e.g., deputyAccess) if available
     const data = readUsersFile();
     const stored = (data.users || []).find((u: any) => u.id === payload.id);
-    const merged = { ...payload, ...(stored ? { deputyAccess: !!stored.deputyAccess, departmentId: stored.departmentId || payload.departmentId } : {}) };
+    const merged = { ...payload, ...(stored ? { deputyAccess: !!stored.deputyAccess, departmentId: stored.departmentId || payload.departmentId, name: stored.name } : {}) };
     return NextResponse.json({ ok: true, user: merged }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (e) {
     return NextResponse.json({ ok: false }, { status: 401, headers: { 'Cache-Control': 'no-store' } });
