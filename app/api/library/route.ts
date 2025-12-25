@@ -38,7 +38,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { title, url, departmentId } = await request.json();
+    const { title, url, departmentId, uploaderId, uploaderName } = await request.json();
     if (!title || !url || !departmentId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
@@ -50,6 +50,8 @@ export async function POST(request: NextRequest) {
       title,
       url,
       departmentId,
+      uploaderId,
+      uploaderName,
       createdAt: new Date().toISOString(),
     };
     books.push(newBook);

@@ -50,6 +50,7 @@ export default function Dashboard() {
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
   const [addStudentSubjectId, setAddStudentSubjectId] = useState<string | null>(null);
   const [addStudentId, setAddStudentId] = useState<string | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
 const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   
@@ -198,6 +199,16 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       } catch (e) {
         console.error('خطأ في تحميل الواجبات', e);
       }
+      // load library for this department
+      try {
+        const libRes = await fetch('/api/library', { cache: 'no-store', credentials: 'include' });
+        if (libRes.ok) {
+          const libData = await libRes.json();
+          setBooks(libData || []);
+        }
+      } catch (e) {
+        console.error('خطأ في تحميل المكتبة', e);
+      }
       // load users for this department (for department managers)
       try {
         const ures = await fetch(`/api/admin/users?page=1&limit=${usersLimit}`, { cache: 'no-store', credentials: 'include' });
@@ -216,6 +227,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       setSubjects([]);
       setVideos([]);
       setUsers([]);
+      setBooks([]);
     }
   };
 
@@ -499,6 +511,13 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
   const handleDeleteBook = async (bookId: string) => {
     if (!confirm('هل تريد حذف هذا الكتاب؟')) return;
+    const book = books.find(b => b.id === bookId);
+    if (!book) return;
+    // Allow admin to delete any book, teachers can delete books in their department
+    if (user?.role !== 'admin' && user?.role !== 'department_manager' && (user?.role !== 'teacher' || book.departmentId !== user.departmentId)) {
+      showToast('ليس لديك صلاحية لحذف هذا الكتاب', 'error');
+      return;
+    }
     try {
       const res = await fetch(`/api/library?id=${bookId}`, { method: 'DELETE' });
       if (res.ok) {
@@ -586,6 +605,8 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   };
 
   const [selectedVideo, setSelectedVideo] = useState<{ video: any; subjectId?: string } | null>(null);
+  const [apiLoaded, setApiLoaded] = useState(false);
+  const playerRef = React.useRef<HTMLDivElement>(null);
 
   // Graduation projects states
   const [graduationProjects, setGraduationProjects] = useState<any[]>([]);
@@ -829,7 +850,17 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     try {
       const youtubeUrlRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
       const match = url.match(youtubeUrlRegex);
-      return match ? `https://www.youtube.com/embed/${match[1]}` : null;
+      return match ? `https://www.youtube.com/embed/${match[1]}?enablejsapi=1` : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function getVideoId(url: string): string | null {
+    try {
+      const youtubeUrlRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+      const match = url.match(youtubeUrlRegex);
+      return match ? match[1] : null;
     } catch {
       return null;
     }
@@ -846,7 +877,62 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       setSelectedVideo({ video, subjectId });
     }
   };
-  const closeVideo = () => setSelectedVideo(null);
+  const closeVideo = () => {
+    setSelectedVideo(null);
+    if (player) player.destroy();
+  };
+
+  const markVideoAsCompleted = async (videoId: string) => {
+    try {
+      const res = await fetch(`/api/videos/${videoId}/complete`, { method: 'POST' });
+      if (res.ok) {
+        // Refresh videos
+        const res2 = await fetch('/api/videos');
+        const data2 = await res2.json();
+        setVideos(data2.videos || []);
+        showToast('تم تسجيل اكتمال الدرس', 'success');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    if ((window as any).YT) {
+      setApiLoaded(true);
+    } else {
+      (window as any).onYouTubeIframeAPIReady = () => setApiLoaded(true);
+      const script = document.createElement('script');
+      script.src = 'https://www.youtube.com/iframe_api';
+      document.head.appendChild(script);
+    }
+  }, []);
+
+  let player: any = null;
+
+  useEffect(() => {
+    if (selectedVideo && apiLoaded && playerRef.current) {
+      if (player) player.destroy();
+      const videoId = getVideoId(selectedVideo.video.url);
+      if (videoId) {
+        player = new (window as any).YT.Player(playerRef.current, {
+          height: '360',
+          width: '100%',
+          videoId,
+          events: {
+            onStateChange: (event: any) => {
+              if (event.data === (window as any).YT.PlayerState.ENDED) {
+                markVideoAsCompleted(selectedVideo.video.id);
+              }
+            }
+          }
+        });
+      }
+    }
+    return () => {
+      if (player) player.destroy();
+    };
+  }, [selectedVideo, apiLoaded]);
 
   const filteredDepartments = departments.filter(d => 
     d.name.includes(searchTerm) || d.description?.includes(searchTerm)
@@ -988,10 +1074,76 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
   if (!user) return null;
 
+  const closeMobileMenu = () => setIsMobileMenuOpen(false);
+
+  const inlineCSS = `
+@media (max-width: 768px) {
+  .` + styles.userHeader + ` {
+    position: fixed !important;
+    top: 0;
+    right: 0;
+    width: 100%;
+    height: 100vh;
+    z-index: 99999;
+    transform: translateX(100%);
+    transition: transform 0.3s ease-in-out;
+    overflow-y: auto;
+    background: #fff;
+  }
+  .` + styles.userHeader + `.mobile-open {
+    transform: translateX(0);
+  }
+  .mobile-menu-toggle {
+    display: block !important;
+    position: fixed;
+    top: 15px;
+    right: 15px;
+    z-index: 9999;
+    background: #1976d2;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  }
+  .` + styles.container + `.` + styles.hasUserSidebar + ` {
+    margin-right: 0 !important;
+    width: 100% !important;
+  }
+  .mobile-navbar-toggle {
+    display: block;
+  }
+  .mobile-menu-toggle {
+    display: none !important;
+  }
+}
+.mobile-menu-toggle { display: none; }
+.mobile-navbar-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  margin-left: 10px;
+}
+`;
+
   return (
     <div className={`${styles.container} ${user?.role === 'user' ? styles.hasUserSidebar : ''}`}>
       {user?.role === 'user' && (
         <div className={styles.userHeader}>
+        <style dangerouslySetInnerHTML={{__html: inlineCSS}} />
+        </div>
+      )}
+
+      {user?.role === 'user' && (
+        <>
+        <button className="mobile-menu-toggle" onClick={() => setIsMobileMenuOpen(true)}>☰</button>
+        <div className={`${styles.userHeader} ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
+          <button onClick={() => setIsMobileMenuOpen(false)} style={{ alignSelf: 'flex-end', margin: '10px', background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', display: isMobileMenuOpen ? 'block' : 'none' }}>✕</button>
           <div className={styles.userInfo}>
             <img src="/home/img/users.png" alt="logo" className={styles.userAvatar} />
             <div className={styles.userText}>
@@ -1000,16 +1152,17 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             </div>
           </div>
           <div className={styles.userActions}>
-            <button className={styles.actionBtn} onClick={() => { setShowInlineNotifsForUser(false); setViewModalType(null); setSelectedVideo(null); setActiveTab('departments'); }}>الريسي</button>
-            <button className={styles.actionBtn} onClick={() => { setShowInlineNotifsForUser(false); setViewModalType('videos'); }}>الدروس</button>
-            <button className={styles.actionBtn} onClick={() => { setShowInlineNotifsForUser(false); setViewModalType('assignments'); }}>الواجبات</button>
-            <button className={styles.actionBtn} onClick={async () => { setShowInlineNotifsForUser(true); await openNotifModal({ openTab: 'notifications', onlyForCurrentUser: true }); setShowNotifModal(false); setViewModalType(null); }}>التنبيهات</button>
-            <button className={styles.actionBtn} onClick={() => { setShowInlineNotifsForUser(false); setViewModalType('subjects'); }}> المواد</button>
-            <button className={styles.actionBtn} onClick={() => { setShowInlineNotifsForUser(false); setViewModalType('graduation_projects'); }}>ملفات مشاريع </button>
-            <button className={styles.actionBtn} onClick={() => { setShowInlineNotifsForUser(false); setViewModalType('library'); }}>المكتبة</button>
+            <button className={styles.actionBtn} onClick={() => { setShowInlineNotifsForUser(false); setViewModalType(null); setSelectedVideo(null); setActiveTab('departments'); closeMobileMenu(); }}>الريسي</button>
+            <button className={styles.actionBtn} onClick={() => { setShowInlineNotifsForUser(false); setViewModalType('videos'); closeMobileMenu(); }}>الدروس</button>
+            <button className={styles.actionBtn} onClick={() => { setShowInlineNotifsForUser(false); setViewModalType('assignments'); closeMobileMenu(); }}>الواجبات</button>
+            <button className={styles.actionBtn} onClick={async () => { setShowInlineNotifsForUser(true); await openNotifModal({ openTab: 'notifications', onlyForCurrentUser: true }); setShowNotifModal(false); setViewModalType(null); closeMobileMenu(); }}>التنبيهات</button>
+            <button className={styles.actionBtn} onClick={() => { setShowInlineNotifsForUser(false); setViewModalType('subjects'); closeMobileMenu(); }}> المواد</button>
+            <button className={styles.actionBtn} onClick={() => { setShowInlineNotifsForUser(false); setViewModalType('graduation_projects'); closeMobileMenu(); }}>ملفات مشاريع </button>
+            <button className={styles.actionBtn} onClick={() => { setShowInlineNotifsForUser(false); setViewModalType('library'); closeMobileMenu(); }}>المكتبة</button>
 
           </div>
         </div>
+        </>
       )}
       {toast && (
         <div style={{
@@ -1077,6 +1230,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       )}
       <nav className={styles.navbar}>
         <div className={styles.navContent}>
+          {user?.role === 'user' && <button onClick={() => setIsMobileMenuOpen(true)} className="mobile-navbar-toggle">☰</button>}
           <img src="../src/sh.png" alt="الشعار" className={styles.logo} />
           <div className={styles.userMenu}>
             <span>{ user?.id}</span>
@@ -1624,6 +1778,18 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                           <p onClick={async (e) => { e.stopPropagation(); if (user?.departmentId) await loadDepartmentData(user.departmentId); setViewModalType('students'); }}>عرض المستخدمين ({users.filter(u => String(u.departmentId) === String(user.departmentId)).length})</p>
                         </div>
                       </div>
+
+                      {/* المكتبة */}
+                      <div className={styles.cardItem}>
+                        <div className={styles.cardItemContent}>
+                          <img src="../src/svg/book.svg" alt="المكتبة" />
+                          <h4>إدارة الكتب</h4>
+                        </div>
+                        <div className={styles.cardItemActions}>
+                          <p onClick={(e) => { e.stopPropagation(); setAddModalType('book'); }}>إضافة رابط الكتاب</p>
+                          <p onClick={(e) => { e.stopPropagation(); setViewModalType('library'); }}>عرض المكتبة ({books.filter(b => b.departmentId === user.departmentId).length})</p>
+                        </div>
+                      </div>
                     </div>
 
                   </>
@@ -1673,6 +1839,17 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                           <div className={styles.cardItemActions}>
                             <p onClick={(e) => { e.stopPropagation(); (async () => { if (user?.departmentId) await loadDepartmentData(user.departmentId); setShowAddStudentModal(true); })(); }}>اضافة طالب</p>
                             <p onClick={(e) => { e.stopPropagation(); setViewModalType('subjects'); }}>عرض المواد التي تدرسها ({subjects.filter(s => s.teacherId === user.id).length})</p>
+                          </div>
+                        </div>
+
+                        <div className={styles.cardItem}>
+                          <div className={styles.cardItemContent}>
+                            <img src="../src/svg/book.svg" alt="المكتبة" />
+                            <h4>إدارة الكتب</h4>
+                          </div>
+                          <div className={styles.cardItemActions}>
+                            <p onClick={(e) => { e.stopPropagation(); setAddModalType('book'); }}>إضافة رابط الكتاب</p>
+                            <p onClick={(e) => { e.stopPropagation(); setViewModalType('library'); }}>عرض المكتبة ({books.filter(b => b.departmentId === user.departmentId).length})</p>
                           </div>
                         </div>
                       </div>
@@ -1748,25 +1925,36 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                                   </div>
                                   <p style={{ marginTop: 8 }}>{a.question || a.description}</p>
                                   <div style={{ marginTop: 8 }}>
-                                    {a.answerType === 'choice' ? (
-                                      <ChoiceAnswer a={a} onComplete={async (ans: string) => {
-                                        await handleCompleteAssignment(a.id, ans);
-                                        setAssignments(prev => prev.map(p => p.id === a.id ? { ...p, completions: [...(p.completions || []), { userId: user?.id || 'unknown', userName: user?.name || user?.id || 'مستخدم', answer: ans, date: new Date().toISOString() }] } : p));
-                                        return true;
-                                      }} />
-                                    ) : a.answerType === 'tf' ? (
-                                      <TFAnswer a={a} onComplete={async (ans: string) => {
-                                        await handleCompleteAssignment(a.id, ans);
-                                        setAssignments(prev => prev.map(p => p.id === a.id ? { ...p, completions: [...(p.completions || []), { userId: user?.id || 'unknown', userName: user?.name || user?.id || 'مستخدم', answer: ans, date: new Date().toISOString() }] } : p));
-                                        return true;
-                                      }} />
-                                    ) : (
-                                      <EssayAnswer a={a} onComplete={async (ans: string) => {
-                                        await handleCompleteAssignment(a.id, ans);
-                                        setAssignments(prev => prev.map(p => p.id === a.id ? { ...p, completions: [...(p.completions || []), { userId: user?.id || 'unknown', userName: user?.name || user?.id || 'مستخدم', answer: ans, date: new Date().toISOString() }] } : p));
-                                        return true;
-                                      }} />
-                                    )}
+                                    {(() => {
+                                      const userCompletion = a.completions?.find((c: any) => c.userId === user?.id);
+                                      if (userCompletion) {
+                                        return (
+                                          <div>
+                                            <p style={{ color: 'green', fontWeight: 'bold' }}>تم إرسال إجابتك:</p>
+                                            <p>{userCompletion.answer}</p>
+                                          </div>
+                                        );
+                                      }
+                                      return a.answerType === 'choice' ? (
+                                        <ChoiceAnswer a={a} onComplete={async (ans: string) => {
+                                          await handleCompleteAssignment(a.id, ans);
+                                          setAssignments(prev => prev.map(p => p.id === a.id ? { ...p, completions: [...(p.completions || []), { userId: user?.id || 'unknown', userName: user?.name || user?.id || 'مستخدم', answer: ans, date: new Date().toISOString() }] } : p));
+                                          return true;
+                                        }} />
+                                      ) : a.answerType === 'tf' ? (
+                                        <TFAnswer a={a} onComplete={async (ans: string) => {
+                                          await handleCompleteAssignment(a.id, ans);
+                                          setAssignments(prev => prev.map(p => p.id === a.id ? { ...p, completions: [...(p.completions || []), { userId: user?.id || 'unknown', userName: user?.name || user?.id || 'مستخدم', answer: ans, date: new Date().toISOString() }] } : p));
+                                          return true;
+                                        }} />
+                                      ) : (
+                                        <EssayAnswer a={a} onComplete={async (ans: string) => {
+                                          await handleCompleteAssignment(a.id, ans);
+                                          setAssignments(prev => prev.map(p => p.id === a.id ? { ...p, completions: [...(p.completions || []), { userId: user?.id || 'unknown', userName: user?.name || user?.id || 'مستخدم', answer: ans, date: new Date().toISOString() }] } : p));
+                                          return true;
+                                        }} />
+                                      );
+                                    })()}
                                   </div>
                                 </div>
                               ))}
@@ -1791,8 +1979,8 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                                 </div>
                               </div>
                               <div style={{ marginTop: 8 }}>
-                                {getYoutubeEmbedUrl(selectedVideo.video.url) ? (
-                                  <iframe src={getYoutubeEmbedUrl(selectedVideo.video.url) || ''} width="100%" height={360} frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                                {getVideoId(selectedVideo.video.url) ? (
+                                  <div ref={playerRef} style={{ width: '100%', height: 360 }} />
                                 ) : (
                                   <a href={selectedVideo.video.url} target="_blank" rel="noreferrer">افتح الفيديو في نافذة جديدة</a>
                                 )}
@@ -1877,18 +2065,21 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                             console.log('filtered books:', filteredBooks);
                             if (filteredBooks.length === 0) return <p>لا توجد كتب في قسمك</p>;
                             return (
-                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
-                                {filteredBooks.map((book: any) => (
-                                  <div key={book.id} style={{
-                                    border: '1px solid #000',
-                                    padding: '10px',
-                                    borderRadius: '8px',
-                                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                                  }}>
-                                    <h5 style={{ margin: '0 0 8px 0' }}>{book.title}</h5>
-                                    <a href={book.url} target="_blank" rel="noreferrer" style={{ padding: '6px 10px', background: '#1976d2', color: 'white', borderRadius: 4, textDecoration: 'none' }}>عرض / تحميل</a>
-                                  </div>
-                                ))}
+                              <div className={styles.bookGrid}>
+                                {filteredBooks.map((book: any) => {
+                                  const uploaderName = book.uploaderName || (() => {
+                                    const uploader = users.find(u => u.id === book.uploaderId);
+                                    return uploader ? (uploader.name || uploader.id) : 'غير معروف';
+                                  })();
+                                  return (
+                                    <div key={book.id} className={styles.bookCard}>
+                                      <h5 className={styles.bookTitle}>{book.title}</h5>
+                                      <p className={styles.bookDate}>تم الرفع بواسطة: {uploaderName}</p>
+                                      <p className={styles.bookDate}>تاريخ الإضافة: {new Date(book.createdAt).toLocaleDateString('ar-SA')}</p>
+                                      <a href={book.url} target="_blank" rel="noreferrer" className={styles.bookLink}>عرض / تحميل</a>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             );
                           })()}
@@ -1897,20 +2088,54 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                     ) : (
                       <>
                         <p>مرحباً بك في منصة الكلية</p>
-                        <div className={styles.userFeatures}>
-                          <div className={styles.feature}>
-                            <h3>الأقسام الخاصة بك</h3>
-                            <p>عرض جميع الأقسام والمواد المتاحة لك</p>
-                          </div>
-                          <div className={styles.feature}>
-                            <h3>المواد الدراسية</h3>
-                            <p>الوصول إلى جميع المواد والمحاضرات</p>
-                          </div>
-                          <div className={styles.feature}>
-                            <h3>الفيديوهات التعليمية</h3>
-                            <p>مشاهدة الفيديوهات الشرح والمحاضرات</p>
-                          </div>
-                        </div>
+                        {(() => {
+                          const userAssignments = assignments.filter(a => String(a.departmentId) === String(user?.departmentId));
+                          const completedAssignments = userAssignments.filter(a => a.completions && a.completions.some((c: any) => c.userId === user?.id));
+                          const incompleteAssignments = userAssignments.filter(a => !a.completions || !a.completions.some((c: any) => c.userId === user?.id));
+                          const userVideos = videos.filter(v => subjects.find(s => s.id === v.subjectId && s.students?.includes(user?.id)));
+                          const completedVideos = userVideos.filter(v => v.completions && v.completions.some((c: any) => c.userId === user?.id)).length;
+                          const incompleteVideos = userVideos.length - completedVideos;
+                          return (
+                            <div className={styles.cardGrid}>
+                              <div className={styles.cardItem} style={{ background: '#ffebee', borderColor: '#f44336' }}>
+                                <div className={styles.cardItemContent}>
+                                  <img src="../src/svg/assignment.svg" alt="واجبات غير مكتملة" />
+                                  <h4>واجبات غير مكتملة</h4>
+                                </div>
+                                <div className={styles.cardItemActions}>
+                                  <p style={{ fontSize: '28px', fontWeight: 'bold', borderBottom: '2px solid #f44336', paddingBottom: '5px' }}>{incompleteAssignments.length}</p>
+                                </div>
+                              </div>
+                              <div className={styles.cardItem} style={{ background: '#e8f5e8', borderColor: '#4caf50' }}>
+                                <div className={styles.cardItemContent}>
+                                  <img src="../src/svg/assignment.svg" alt="واجبات مكتملة" />
+                                  <h4>واجبات مكتملة</h4>
+                                </div>
+                                <div className={styles.cardItemActions}>
+                                  <p style={{ fontSize: '28px', fontWeight: 'bold', borderBottom: '2px solid #4caf50', paddingBottom: '5px' }}>{completedAssignments.length}</p>
+                                </div>
+                              </div>
+                              <div className={styles.cardItem} style={{ background: '#fff3e0', borderColor: '#ff9800' }}>
+                                <div className={styles.cardItemContent}>
+                                  <img src="../src/svg/video.svg" alt="دروس غير مكتملة" />
+                                  <h4>دروس غير مكتملة</h4>
+                                </div>
+                                <div className={styles.cardItemActions}>
+                                  <p style={{ fontSize: '28px', fontWeight: 'bold', borderBottom: '2px solid #ff9800', paddingBottom: '5px' }}>{incompleteVideos}</p>
+                                </div>
+                              </div>
+                              <div className={styles.cardItem} style={{ background: '#e3f2fd', borderColor: '#2196f3' }}>
+                                <div className={styles.cardItemContent}>
+                                  <img src="../src/svg/video.svg" alt="دروس مكتملة" />
+                                  <h4>دروس مكتملة</h4>
+                                </div>
+                                <div className={styles.cardItemActions}>
+                                  <p style={{ fontSize: '28px', fontWeight: 'bold', borderBottom: '2px solid #2196f3', paddingBottom: '5px' }}>{completedVideos}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </>
                     )
                   )
@@ -1966,15 +2191,32 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             {addModalType === 'book' && (
               <div>
                 <h3>إضافة رابط كتاب</h3>
-                <form onSubmit={(e) => {
+                <form onSubmit={async (e) => {
                   e.preventDefault();
                   const formData = new FormData(e.target as HTMLFormElement);
                   const title = formData.get('title') as string;
                   const url = formData.get('url') as string;
                   const departmentId = formData.get('departmentId') as string;
                   if (title && url && departmentId) {
-                    handleAddBook(title, url, departmentId);
-                    setAddModalType(null);
+                    try {
+                      const res = await fetch('/api/library', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ title, url, departmentId, uploaderId: user?.id, uploaderName: user?.name || user?.id }),
+                      });
+                      if (res.ok) {
+                        const newBook = await res.json();
+                        setBooks(prev => [...prev, newBook]);
+                        showToast && showToast('تم إضافة الكتاب بنجاح', 'success');
+                        setAddModalType(null);
+                      } else {
+                        const error = await res.text();
+                        showToast && showToast('فشل في إضافة الكتاب: ' + error, 'error');
+                      }
+                    } catch (err) {
+                      console.error(err);
+                      showToast && showToast('خطأ في الإضافة', 'error');
+                    }
                   }
                 }}>
                   <div style={{ marginBottom: '10px' }}>
@@ -1987,11 +2229,21 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                   </div>
                   <div style={{ marginBottom: '10px' }}>
                     <label>القسم</label>
-                    <select name="departmentId" required style={{ width: '100%', padding: '8px', marginTop: '5px' }}>
-                      {departments.map(dept => (
-                        <option key={dept.id} value={dept.id}>{dept.name}</option>
-                      ))}
-                    </select>
+                    {(() => {
+                      const deptName = departments.find(d => d.id === user.departmentId)?.name || 'قسمك';
+                      return (user?.role === 'teacher' || user?.role === 'department_manager') ? (
+                        <>
+                          <input name="departmentId" type="hidden" value={user.departmentId} />
+                          <p>{deptName}</p>
+                        </>
+                      ) : (
+                        <select name="departmentId" required style={{ width: '100%', padding: '8px', marginTop: '5px' }}>
+                          {departments.map(dept => (
+                            <option key={dept.id} value={dept.id}>{dept.name}</option>
+                          ))}
+                        </select>
+                      );
+                    })()}
                   </div>
                   <button type="submit" style={{ padding: '10px 20px', background: '#007bff', color: 'white', border: 'none', borderRadius: '5px' }}>إضافة</button>
                 </form>
@@ -2526,7 +2778,14 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
                 {(() => {
                   const q = (modalLibrarySearchTerm || '').toLowerCase();
-                  const list = books.filter(b => {
+                  let filteredBooks = books;
+                  // Filter by department for non-admin users
+                  if (user?.role === 'teacher' || user?.role === 'department_manager') {
+                    filteredBooks = books.filter(b => b.departmentId === user.departmentId);
+                  } else if (user?.role === 'user') {
+                    filteredBooks = books.filter(b => b.departmentId === user.departmentId);
+                  }
+                  const list = filteredBooks.filter(b => {
                     if (!q) return true;
                     const title = (b.title || '').toString().toLowerCase();
                     const deptName = (departments.find(d => d.id === b.departmentId)?.name || '').toString().toLowerCase();
@@ -2549,6 +2808,10 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
                         {list.map(book => {
                           const dept = departments.find(d => d.id === book.departmentId);
+                          const uploaderName = book.uploaderName || (() => {
+                            const uploader = users.find(u => u.id === book.uploaderId);
+                            return uploader ? (uploader.name || uploader.id) : 'غير معروف';
+                          })();
                           return (
                             <div key={book.id} style={{
                               border: '1px solid #000',
@@ -2557,10 +2820,14 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                               boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                             }}>
                               <h5 style={{ margin: '0 0 8px 0' }}>{book.title}</h5>
-                              <p style={{ color: '#666', fontSize: '12px', margin: '0 0 5px 0' }}>القسم: {dept ? dept.name : 'غير محدد'}</p>
+                              <p style={{ color: '#666', fontSize: '14px', margin: '0 0 5px 0' }}>القسم: {dept ? dept.name : 'غير محدد'}</p>
+                              <p style={{ color: '#666', fontSize: '14px', margin: '0 0 5px 0' }}>تم الرفع بواسطة: {uploaderName}</p>
+                              <p style={{ color: '#666', fontSize: '14px', margin: '0 0 5px 0' }}>تاريخ الإضافة: {new Date(book.createdAt).toLocaleDateString('en-US')}</p>
                               <div style={{ display: 'flex', gap: '8px' }}>
                                 <button onClick={() => window.open(book.url, '_blank')} style={{ padding: '4px 8px', fontSize: '12px', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px' }}>فتح الرابط</button>
-                                <button onClick={() => handleDeleteBook(book.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
+                                {(user?.role === 'admin' || user?.role === 'department_manager' || (user?.role === 'teacher' && book.departmentId === user.departmentId)) && (
+                                  <button onClick={() => handleDeleteBook(book.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
+                                )}
                               </div>
                             </div>
                           );
@@ -2883,10 +3150,10 @@ function AddAssignmentForm({ subjects, onAdd }: { subjects?: any[]; onAdd: (titl
       <input value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="مثال: واجب الأسبوع 1" style={inputStyle} />
 
       <label>السؤال</label>
-      <textarea value={question} onChange={(e) => setQuestion(e.target.value)} rows={3} placeholder="نص السؤال" style={{ ...inputStyle, resize: 'vertical' }} />
+      <textarea value={question} onChange={(e) => setQuestion(e.target.value)} rows={3} required placeholder="نص السؤال" style={{ ...inputStyle, resize: 'vertical' }} />
 
       <label>نوع الإجابة</label>
-      <select value={answerType} onChange={(e) => setAnswerType(e.target.value)} style={inputStyle}>
+      <select value={answerType} onChange={(e) => setAnswerType(e.target.value)} required style={inputStyle}>
         <option value="choice">اختيار من متعدد</option>
         <option value="tf">صح / خطأ</option>
         <option value="essay">مقالي</option>
@@ -2895,16 +3162,16 @@ function AddAssignmentForm({ subjects, onAdd }: { subjects?: any[]; onAdd: (titl
       {answerType === 'choice' && (
         <>
           <label>الخيارات (افصل بين الخيارات بـ <span style={{ fontWeight: 600 }}>|</span>)</label>
-          <input value={optionsText} onChange={(e) => setOptionsText(e.target.value)} placeholder="خيار1 | خيار2 | خيار3" style={inputStyle} />
+          <input value={optionsText} onChange={(e) => setOptionsText(e.target.value)} required placeholder="خيار1 | خيار2 | خيار3" style={inputStyle} />
           <label>الإجابة الصحيحة (نص الخيار الصحيح)</label>
-          <input value={correctAnswer} onChange={(e) => setCorrectAnswer(e.target.value)} placeholder="ضع النص الصحيح من الخيارات" style={inputStyle} />
+          <input value={correctAnswer} onChange={(e) => setCorrectAnswer(e.target.value)} required placeholder="ضع النص الصحيح من الخيارات" style={inputStyle} />
         </>
       )}
 
       {answerType === 'tf' && (
         <>
           <label>الإجابة الصحيحة</label>
-          <select value={correctAnswer} onChange={(e) => setCorrectAnswer(e.target.value)} style={inputStyle}>
+          <select value={correctAnswer} onChange={(e) => setCorrectAnswer(e.target.value)} required style={inputStyle}>
             <option value="true">صح</option>
             <option value="false">خطأ</option>
           </select>
@@ -2914,9 +3181,9 @@ function AddAssignmentForm({ subjects, onAdd }: { subjects?: any[]; onAdd: (titl
       <label>تاريخ التسليم (اختياري)</label>
       <input type="date" value={due} onChange={(e) => setDue(e.target.value)} style={inputStyle} />
 
-      <label>المادة (اختياري)</label>
-      <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)} style={{ padding: '8px', border: '1px solid #ccc', borderRadius: 4 }}>
-        <option value="">- بدون مادة -</option>
+      <label>المادة</label>
+      <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)} required style={{ padding: '8px', border: '1px solid #ccc', borderRadius: 4 }}>
+        <option value="" disabled>اختر المادة</option>
         {(subjects || []).map(s => (
           <option key={s.id} value={s.id}>{s.name}</option>
         ))}
@@ -2932,6 +3199,11 @@ function AddAssignmentForm({ subjects, onAdd }: { subjects?: any[]; onAdd: (titl
 
 function ChoiceAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => Promise<boolean> }) {
   const [selected, setSelected] = useState('');
+  const handleSubmit = async () => {
+    if (!selected) return;
+    if (!confirm('هل أنت متأكد من إرسال إجابتك؟ لا يمكنك تغييرها لاحقاً.')) return;
+    await onComplete(selected);
+  };
   return (
     <div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -2942,7 +3214,7 @@ function ChoiceAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => 
         ))}
       </div>
       <div style={{ marginTop: 8 }}>
-        <button onClick={() => selected && onComplete(selected)} style={{ padding: '8px 12px' }}>أجب</button>
+        <button onClick={handleSubmit} disabled={!selected} style={{ padding: '10px 20px', background: selected ? '#007bff' : '#ccc', color: 'white', border: 'none', borderRadius: '5px', cursor: selected ? 'pointer' : 'not-allowed' }}>أجب</button>
       </div>
     </div>
   );
@@ -2950,6 +3222,10 @@ function ChoiceAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => 
 
 function TFAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => Promise<boolean> }) {
   const [val, setVal] = useState('true');
+  const handleSubmit = async () => {
+    if (!confirm('هل أنت متأكد من إرسال إجابتك؟ لا يمكنك تغييرها لاحقاً.')) return;
+    await onComplete(val);
+  };
   return (
     <div>
       <div>
@@ -2957,7 +3233,7 @@ function TFAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => Prom
         <label><input type="radio" name={`tf-${a.id}`} value="false" checked={val === 'false'} onChange={() => setVal('false')} /> خطأ</label>
       </div>
       <div style={{ marginTop: 8 }}>
-        <button onClick={() => onComplete(val)} style={{ padding: '8px 12px' }}>أجب</button>
+        <button onClick={handleSubmit} style={{ padding: '10px 20px', background: '#007bff', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>أجب</button>
       </div>
     </div>
   );
@@ -2965,11 +3241,16 @@ function TFAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => Prom
 
 function EssayAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => Promise<boolean> }) {
   const [text, setText] = useState('');
+  const handleSubmit = async () => {
+    if (!text.trim()) return;
+    if (!confirm('هل أنت متأكد من إرسال إجابتك؟ لا يمكنك تغييرها لاحقاً.')) return;
+    await onComplete(text);
+  };
   return (
     <div>
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} style={{ width: '100%', padding: 8 }} />
       <div style={{ marginTop: 8 }}>
-        <button onClick={() => text && onComplete(text)} style={{ padding: '8px 12px' }}>أجب</button>
+        <button onClick={handleSubmit} disabled={!text.trim()} style={{ padding: '10px 20px', background: text.trim() ? '#007bff' : '#ccc', color: 'white', border: 'none', borderRadius: '5px', cursor: text.trim() ? 'pointer' : 'not-allowed' }}>أجب</button>
       </div>
     </div>
   );
