@@ -79,8 +79,17 @@ export async function DELETE(req: Request) {
     const assignment = all.find((a: any) => a.id === id);
     if (!assignment) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
-    if (user && user.role === 'department_manager') {
-      if (assignment.departmentId !== user.departmentId) {
+    // Check authorization
+    if (user) {
+      if (user.role === 'department_manager') {
+        if (assignment.departmentId !== user.departmentId) {
+          return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+        }
+      } else if (user.role === 'teacher') {
+        if (assignment.departmentId !== user.departmentId) {
+          return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+        }
+      } else {
         return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
       }
     }

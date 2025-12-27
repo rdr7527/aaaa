@@ -17,6 +17,7 @@ export default function Dashboard() {
   const [subjects, setSubjects] = useState<any[]>([]);
   const [videos, setVideos] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
+  const [previousQuestions, setPreviousQuestions] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [usersPage, setUsersPage] = useState<number>(1);
   const [usersLimit] = useState<number>(50);
@@ -39,6 +40,7 @@ export default function Dashboard() {
   const [modalStudentsFilter, setModalStudentsFilter] = useState<'all' | 'teacher' | 'user'>('all');
   const [modalDeptSearchTerm, setModalDeptSearchTerm] = useState('');
   const [modalLibrarySearchTerm, setModalLibrarySearchTerm] = useState('');
+  const [assignmentSortType, setAssignmentSortType] = useState<'none' | 'name' | 'date'>('none');
   const deptListRef = React.useRef<HTMLDivElement | null>(null);
   const router = useRouter();
 
@@ -134,6 +136,13 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
           setBooks(libData || []);
         }
 
+        // load previous questions for admin (all departments)
+        const pqResAdmin = await fetch('/api/previous_questions');
+        if (pqResAdmin.ok) {
+          const pqData = await pqResAdmin.json();
+          setPreviousQuestions(pqData.previousQuestions || []);
+        }
+
         setVideos([]);
         return;
       }
@@ -199,6 +208,16 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       } catch (e) {
         console.error('خطأ في تحميل الواجبات', e);
       }
+      // load previous questions for this department
+      try {
+        const pqRes = await fetch(`/api/previous_questions?departmentId=${deptId}`, { cache: 'no-store', credentials: 'include' });
+        if (pqRes.ok) {
+          const pqBody = await pqRes.json();
+          setPreviousQuestions(pqBody.previousQuestions || []);
+        }
+      } catch (e) {
+        console.error('خطأ في تحميل الأسئلة السابقة', e);
+      }
       // load library for this department
       try {
         const libRes = await fetch('/api/library', { cache: 'no-store', credentials: 'include' });
@@ -231,14 +250,14 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     }
   };
 
-  const handleAddAssignment = async (title: string, question: string, answerType: string, options?: string[], correctAnswer?: string, dueDate?: string, subjectId?: string) => {
+  const handleAddAssignment = async (title: string, question: string, answerType: string, options?: string[], correctAnswer?: string, dueDate?: string, subjectId?: string, fileRequirement?: string) => {
     if (!user?.departmentId) return;
     try {
       const res = await fetch('/api/assignments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ title, question, answerType, options, correctAnswer, dueDate, departmentId: user.departmentId, subjectId }),
+        body: JSON.stringify({ title, question, answerType, options, correctAnswer, dueDate, departmentId: user.departmentId, subjectId, fileRequirement }),
       });
       if (res.ok) {
         // reload assignments
@@ -256,18 +275,31 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     }
   };
 
-  const handleCompleteAssignment = async (assignmentId: string, answer: any) => {
+  const handleCompleteAssignment = async (assignmentId: string, answer: any, file?: File) => {
     if (!user) return;
     try {
-      const res = await fetch(`/api/assignments/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ assignmentId, answer, userId: user.id, userName: user.name || user.id }),
-      });
+      let res: Response;
+      if (file) {
+        const formData = new FormData();
+        formData.append('assignmentId', assignmentId);
+        formData.append('answer', answer || '');
+        formData.append('file', file);
+        res = await fetch(`/api/assignments/complete`, {
+          method: 'POST',
+          credentials: 'include',
+          body: formData,
+        });
+      } else {
+        res = await fetch(`/api/assignments/complete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ assignmentId, answer, userId: user.id, userName: user.name || user.id }),
+        });
+      }
       if (res.ok) {
         // update local state to show completion to manager
-        setAssignments(prev => prev.map(a => a.id === assignmentId ? { ...a, completions: [...(a.completions || []), { userId: user.id, userName: user.name || user.id, answer, date: new Date().toISOString() }] } : a));
+        setAssignments(prev => prev.map(a => a.id === assignmentId ? { ...a, completions: [...(a.completions || []), { userId: user.id, userName: user.name || user.id, answer, date: new Date().toISOString(), fileUrl: file ? `/api/uploads/assignments/${Date.now()}-${file.name}` : null }] } : a));
       }
     } catch (e) {
       console.error(e);
@@ -555,19 +587,52 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   };
 
   const handleDeleteAssignment = async (assignmentId: string) => {
-    if (!user || user.role !== 'department_manager') return;
+    if (!user) {
+      showToast('يرجى تسجيل الدخول', 'error');
+      return;
+    }
+    if (user.role !== 'department_manager' && user.role !== 'teacher') {
+      showToast('ليس لديك صلاحية لحذف الواجب', 'error');
+      return;
+    }
     if (!confirm('هل تريد حذف هذا الواجب؟')) return;
     try {
-      const res = await fetch(`/api/assignments?id=${encodeURIComponent(assignmentId)}`, { method: 'DELETE' });
+      const res = await fetch(`/api/assignments?id=${encodeURIComponent(assignmentId)}`, { method: 'DELETE', credentials: 'include' });
       if (res.ok) {
         // reload assignments
-        const ares = await fetch(`/api/assignments?departmentId=${user.departmentId}`);
+        const ares = await fetch(`/api/assignments?departmentId=${user.departmentId}`, { credentials: 'include' });
         if (ares.ok) {
           const abody = await ares.json();
           setAssignments(abody.assignments || []);
+          showToast('تم حذف الواجب بنجاح', 'success');
+        } else {
+          showToast('فشل في إعادة تحميل الواجبات', 'error');
         }
       } else {
-        console.error('فشل حذف الواجب');
+        const errorBody = await res.json();
+        showToast(`فشل في حذف الواجب: ${errorBody.error || 'خطأ غير معروف'}`, 'error');
+        console.error('فشل حذف الواجب:', errorBody);
+      }
+    } catch (e) {
+      showToast('خطأ في حذف الواجب', 'error');
+      console.error(e);
+    }
+  };
+
+  const handleDeletePreviousQuestion = async (questionId: string) => {
+    if (!user || user.role !== 'department_manager') return;
+    if (!confirm('هل تريد حذف هذا السؤال؟')) return;
+    try {
+      const res = await fetch(`/api/previous_questions?id=${encodeURIComponent(questionId)}`, { method: 'DELETE' });
+      if (res.ok) {
+        // reload previous questions
+        const pqRes = await fetch(`/api/previous_questions?departmentId=${user.departmentId}`);
+        if (pqRes.ok) {
+          const pqBody = await pqRes.json();
+          setPreviousQuestions(pqBody.previousQuestions || []);
+        }
+      } else {
+        console.error('فشل حذف السؤال');
       }
     } catch (e) {
       console.error(e);
@@ -842,9 +907,9 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       setUploadingGrad(false);
     }
   };
-  const [addModalType, setAddModalType] = useState<'subject' | 'video' | 'assignment' | 'student' | 'department' | 'teacher' | 'book' | null>(null);
+  const [addModalType, setAddModalType] = useState<'subject' | 'video' | 'assignment' | 'student' | 'department' | 'teacher' | 'book' | 'previous_question' | null>(null);
 
-  const [viewModalType, setViewModalType] = useState<'subjects' | 'videos' | 'assignments' | 'students' | 'departments' | 'teachers' | 'users' | 'deptSubjects' | 'graduation_projects' | 'library' | null>(null);
+  const [viewModalType, setViewModalType] = useState<'subjects' | 'videos' | 'assignments' | 'students' | 'departments' | 'teachers' | 'users' | 'deptSubjects' | 'graduation_projects' | 'library' | 'previous_questions' | null>(null);
 
   function getYoutubeEmbedUrl(url: string): string | null {
     try {
@@ -1135,7 +1200,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     <div className={`${styles.container} ${user?.role === 'user' ? styles.hasUserSidebar : ''}`}>
       {user?.role === 'user' && (
         <div className={styles.userHeader}>
-        <style dangerouslySetInnerHTML={{__html: inlineCSS}} />
+          <style dangerouslySetInnerHTML={{__html: inlineCSS}} />
         </div>
       )}
 
@@ -1159,6 +1224,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             <button className={styles.actionBtn} onClick={() => { setShowInlineNotifsForUser(false); setViewModalType('subjects'); closeMobileMenu(); }}> المواد</button>
             <button className={styles.actionBtn} onClick={() => { setShowInlineNotifsForUser(false); setViewModalType('graduation_projects'); closeMobileMenu(); }}>ملفات مشاريع </button>
             <button className={styles.actionBtn} onClick={() => { setShowInlineNotifsForUser(false); setViewModalType('library'); closeMobileMenu(); }}>المكتبة</button>
+            <button className={styles.actionBtn} onClick={() => { setShowInlineNotifsForUser(false); setViewModalType('previous_questions'); closeMobileMenu(); }}>الأسئلة السابقة</button>
 
           </div>
         </div>
@@ -1298,6 +1364,8 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                       </div>
                     </div>
                   )}
+
+
 
                   {/* Notifications card */}
                   <div className={styles.cardItem}>
@@ -1790,6 +1858,18 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                           <p onClick={(e) => { e.stopPropagation(); setViewModalType('library'); }}>عرض المكتبة ({books.filter(b => b.departmentId === user.departmentId).length})</p>
                         </div>
                       </div>
+
+                      {/* الأسئلة السابقة */}
+                      <div className={styles.cardItem}>
+                        <div className={styles.cardItemContent}>
+                          <img src="../src/svg/assignment.svg" alt="الأسئلة السابقة" />
+                          <h4>إضافة سؤال سابق</h4>
+                        </div>
+                        <div className={styles.cardItemActions}>
+                          <p onClick={(e) => { e.stopPropagation(); setAddModalType('previous_question'); }}>إضافة سؤال سابق</p>
+                          <p onClick={(e) => { e.stopPropagation(); setViewModalType('previous_questions'); }}>عرض الأسئلة السابقة ({previousQuestions.length})</p>
+                        </div>
+                      </div>
                     </div>
 
                   </>
@@ -1866,12 +1946,28 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                         {(!sentNotifications || sentNotifications.length === 0) ? (
                           <p>لا توجد تنبيهات</p>
                         ) : (
-                          <div style={{ display: 'grid', gap: 10 }}>
+                          <div style={{ display: 'grid', gap: 15 }}>
                             {sentNotifications.map((n: any) => (
-                              <div key={n.id || n._id || `${n.to}-${n.message || n.text || ''}`} style={{ border: '1px solid #000', padding: 10, borderRadius: 8 }}>
-                                <div style={{ fontSize: 13 }}>{n.message || n.text || n.body || n.title || ''}</div>
-                                <div style={{ marginTop: 6, fontSize: 11, color: '#666' }}>إلى: {String(n.to)}</div>
-                                {n.date && <div style={{ fontSize: 11, color: '#666' }}>التاريخ: {new Date(n.date).toLocaleString()}</div>}
+                              <div key={n.id || n._id || `${n.to}-${n.message || n.text || ''}`} style={{
+                                border: '2px solid #f44336',
+                                padding: '15px',
+                                borderRadius: '10px',
+                                boxShadow: '0 3px 6px rgba(0,0,0,0.1)',
+                                backgroundColor: '#ffebee',
+                                transition: 'transform 0.2s',
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.01)'}
+                              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                              >
+                                <div style={{ fontSize: 16, color: '#333', marginBottom: '10px', lineHeight: '1.4' }}>
+                                  � {n.message || n.text || n.body || n.title || ''}
+                                </div>
+                                <div style={{ marginTop: 8, fontSize: 13, color: '#666' }}>
+                                  👤 إلى: {String(n.to)}
+                                </div>
+                                {n.date && <div style={{ fontSize: 13, color: '#666' }}>
+                                  📅 التاريخ: {new Date(n.date).toLocaleString('ar-SA')}
+                                </div>}
                               </div>
                             ))}
                           </div>
@@ -1888,17 +1984,26 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                           {filteredSubjects.length === 0 ? (
                             <p>لا توجد مواد</p>
                           ) : (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
                               {filteredSubjects.map(subject => (
                                 <div key={subject.id} style={{
-                                  border: '1px solid #000',
-                                  padding: '10px',
-                                  borderRadius: '8px',
-                                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                                }}>
-                                  <h5 style={{ margin: '0 0 6px 0' }}>{subject.name}</h5>
-                                  <p style={{ color: '#333', fontSize: '13px', margin: '0 0 6px 0', fontWeight: 500 }}>الدكتور: {(() => { const _t = teachers.find(t => String(t.id) === String(subject.teacherId)); return _t ? (_t.name || _t.id) : (subject.teacherId || 'غير محدد'); })()}</p>
-                                  <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>{subject.description}</p>
+                                  border: '2px solid #9c27b0',
+                                  padding: '20px',
+                                  borderRadius: '12px',
+                                  boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+                                  backgroundColor: '#f3e5f5',
+                                  transition: 'transform 0.2s',
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                >
+                                  <h5 style={{ margin: '0 0 10px 0', color: '#7b1fa2', fontSize: '18px', fontWeight: 'bold' }}>
+                                    📖 {subject.name}
+                                  </h5>
+                                  <p style={{ color: '#333', fontSize: '14px', margin: '0 0 10px 0', fontWeight: 500 }}>
+                                    👨‍🏫 الدكتور: {(() => { const _t = teachers.find(t => String(t.id) === String(subject.teacherId)); return _t ? (_t.name || _t.id) : (subject.teacherId || 'غير محدد'); })()}
+                                  </p>
+                                  <p style={{ color: '#666', fontSize: '14px', margin: '0', lineHeight: '1.4' }}>{subject.description}</p>
                                 </div>
                               ))}
                             </div>
@@ -1912,52 +2017,79 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                         </div>
                         <div>
                           {assignments && assignments.length > 0 ? (
-                            <div style={{ display: 'grid', gap: 10 }}>
-                              {assignments.filter(a => String(a.departmentId) === String(user.departmentId)).map(a => (
-                                <div key={a.id} style={{ border: '1px solid #000', padding: 10, borderRadius: 8 }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <div>
-                                      <div style={{ fontSize: 12, color: '#666' }}>{a.subjectId ? `المادة: ${subjects.find(s => String(s.id) === String(a.subjectId))?.name || a.subjectId}` : ''}</div>
-                                      <strong style={{ fontSize: 14 }}>{a.title}</strong>
-
+                            <div style={{ display: 'grid', gap: 20 }}>
+                              {assignments.filter(a => String(a.departmentId) === String(user.departmentId)).map(a => {
+                                const userCompletion = a.completions?.find((c: any) => c.userId === user?.id);
+                                const isCompleted = !!userCompletion;
+                                const borderColor = isCompleted ? '#4caf50' : '#f44336';
+                                const backgroundColor = isCompleted ? '#e8f5e8' : '#ffebee';
+                                const titleColor = isCompleted ? '#2e7d32' : '#c62828';
+                                const deadlineColor = isCompleted ? '#1b5e20' : '#b71c1c';
+                                return (
+                                  <div key={a.id} style={{
+                                    border: `2px solid ${borderColor}`,
+                                    padding: '20px',
+                                    borderRadius: '12px',
+                                    boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+                                    backgroundColor,
+                                    transition: 'transform 0.2s',
+                                  }}
+                                  onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.01)'}
+                                  onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                  >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                                      <div>
+                                        <div style={{ fontSize: 14, color: '#666', marginBottom: '5px' }}>
+                                          📚 {a.subjectId ? `المادة: ${subjects.find(s => String(s.id) === String(a.subjectId))?.name || a.subjectId}` : ''}
+                                        </div>
+                                        <strong style={{ fontSize: 18, color: titleColor }}>📝 {a.title}</strong>
+                                      </div>
+                                      <span style={{ fontSize: 13, color: deadlineColor, fontWeight: 'bold' }}>
+                                        {a.dueDate ? `⏰ المهلة: ${new Date(a.dueDate).toLocaleDateString('ar-SA')}` : ''}
+                                      </span>
                                     </div>
-                                    <span style={{ fontSize: 11, color: '#666' }}>{a.dueDate ? `المهلة: ${new Date(a.dueDate).toLocaleDateString()}` : ''}</span>
-                                  </div>
-                                  <p style={{ marginTop: 8 }}>{a.question || a.description}</p>
-                                  <div style={{ marginTop: 8 }}>
-                                    {(() => {
-                                      const userCompletion = a.completions?.find((c: any) => c.userId === user?.id);
-                                      if (userCompletion) {
-                                        return (
-                                          <div>
-                                            <p style={{ color: 'green', fontWeight: 'bold' }}>تم إرسال إجابتك:</p>
-                                            <p>{userCompletion.answer}</p>
-                                          </div>
+                                    <p style={{ marginBottom: '15px', fontSize: '16px', lineHeight: '1.5', color: '#333' }}>{a.question || a.description}</p>
+                                    <div>
+                                      {(() => {
+                                        if (userCompletion) {
+                                          return (
+                                            <div>
+                                              <p style={{ color: 'green', fontWeight: 'bold' }}>تم إرسال إجابتك:</p>
+                                              <p>{userCompletion.answer}</p>
+                                              {userCompletion.fileUrl && (
+                                                <p>
+                                                  <a href={userCompletion.fileUrl} download style={{ color: '#007bff', textDecoration: 'none', padding: '8px 16px', background: '#e3f2fd', border: '1px solid #007bff', borderRadius: '4px', display: 'inline-block', fontSize: '14px' }}>
+                                                    📥 تحميل الملف
+                                                  </a>
+                                                </p>
+                                              )}
+                                            </div>
+                                          );
+                                        }
+                                        return a.answerType === 'choice' ? (
+                                          <ChoiceAnswer a={a} onComplete={async (ans: string, file?: File) => {
+                                            await handleCompleteAssignment(a.id, ans, file);
+                                            setAssignments(prev => prev.map(p => p.id === a.id ? { ...p, completions: [...(p.completions || []), { userId: user?.id || 'unknown', userName: user?.name || user?.id || 'مستخدم', answer: ans, date: new Date().toISOString(), fileUrl: file ? `/api/uploads/assignments/${Date.now()}-${file.name}` : null }] } : p));
+                                            return true;
+                                          }} />
+                                        ) : a.answerType === 'tf' ? (
+                                          <TFAnswer a={a} onComplete={async (ans: string, file?: File) => {
+                                            await handleCompleteAssignment(a.id, ans, file);
+                                            setAssignments(prev => prev.map(p => p.id === a.id ? { ...p, completions: [...(p.completions || []), { userId: user?.id || 'unknown', userName: user?.name || user?.id || 'مستخدم', answer: ans, date: new Date().toISOString(), fileUrl: file ? `/api/uploads/assignments/${Date.now()}-${file.name}` : null }] } : p));
+                                            return true;
+                                          }} />
+                                        ) : (
+                                          <EssayAnswer a={a} onComplete={async (ans: string, file?: File) => {
+                                            await handleCompleteAssignment(a.id, ans, file);
+                                            setAssignments(prev => prev.map(p => p.id === a.id ? { ...p, completions: [...(p.completions || []), { userId: user?.id || 'unknown', userName: user?.name || user?.id || 'مستخدم', answer: ans, date: new Date().toISOString(), fileUrl: file ? `/api/uploads/assignments/${Date.now()}-${file.name}` : null }] } : p));
+                                            return true;
+                                          }} />
                                         );
-                                      }
-                                      return a.answerType === 'choice' ? (
-                                        <ChoiceAnswer a={a} onComplete={async (ans: string) => {
-                                          await handleCompleteAssignment(a.id, ans);
-                                          setAssignments(prev => prev.map(p => p.id === a.id ? { ...p, completions: [...(p.completions || []), { userId: user?.id || 'unknown', userName: user?.name || user?.id || 'مستخدم', answer: ans, date: new Date().toISOString() }] } : p));
-                                          return true;
-                                        }} />
-                                      ) : a.answerType === 'tf' ? (
-                                        <TFAnswer a={a} onComplete={async (ans: string) => {
-                                          await handleCompleteAssignment(a.id, ans);
-                                          setAssignments(prev => prev.map(p => p.id === a.id ? { ...p, completions: [...(p.completions || []), { userId: user?.id || 'unknown', userName: user?.name || user?.id || 'مستخدم', answer: ans, date: new Date().toISOString() }] } : p));
-                                          return true;
-                                        }} />
-                                      ) : (
-                                        <EssayAnswer a={a} onComplete={async (ans: string) => {
-                                          await handleCompleteAssignment(a.id, ans);
-                                          setAssignments(prev => prev.map(p => p.id === a.id ? { ...p, completions: [...(p.completions || []), { userId: user?.id || 'unknown', userName: user?.name || user?.id || 'مستخدم', answer: ans, date: new Date().toISOString() }] } : p));
-                                          return true;
-                                        }} />
-                                      );
-                                    })()}
+                                      })()}
+                                    </div>
                                   </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           ) : (
                             <p>لا توجد واجبات</p>
@@ -2002,19 +2134,37 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                             {filteredVideosForUser.length === 0 ? (
                               <p>لا توجد دروس</p>
                             ) : (
-                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
                                 {filteredVideosForUser.map(video => (
                                   <div key={video.id} style={{
-                                    border: '1px solid #000',
-                                    padding: '10px',
-                                    borderRadius: '8px',
-                                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                                  }}>
-                                    <h5 style={{ margin: '0 0 8px 0' }}>{video.title}</h5>
-                                    <p style={{ color: '#666', fontSize: '12px', margin: '0 0 4px 0' }}>{video.description}</p>
-                                    <p style={{ color: '#000', fontSize: '11px', margin: '0 0 8px 0' }}>المادة: {video.subjectName}</p>
-                                    <div style={{ display: 'flex', gap: '6px' }}>
-                                      <button onClick={() => openVideo(video, video.subjectId)} style={{ padding: '4px 8px', fontSize: '12px' }}>▶ تشغيل</button>
+                                    border: '2px solid #4caf50',
+                                    padding: '20px',
+                                    borderRadius: '12px',
+                                    boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+                                    backgroundColor: '#f9f9f9',
+                                    transition: 'transform 0.2s',
+                                  }}
+                                  onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                                  onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                  >
+                                    <div style={{ marginBottom: '15px' }}>
+                                      <h5 style={{ margin: '0 0 10px 0', color: '#4caf50', fontSize: '18px', fontWeight: 'bold' }}>
+                                        🎥 {video.title}
+                                      </h5>
+                                      <p style={{ color: '#666', fontSize: '14px', margin: '0 0 10px 0', lineHeight: '1.4' }}>{video.description}</p>
+                                      <p style={{ color: '#333', fontSize: '14px', margin: '0 0 15px 0', fontWeight: '500' }}>📚 المادة: {video.subjectName}</p>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                      <button onClick={() => openVideo(video, video.subjectId)} style={{
+                                        padding: '10px 15px',
+                                        background: '#4caf50',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '6px',
+                                        cursor: 'pointer',
+                                        fontSize: '14px',
+                                        fontWeight: 'bold'
+                                      }}>▶ تشغيل الدرس</button>
                                     </div>
                                   </div>
                                 ))}
@@ -2033,23 +2183,85 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                             const list = graduationProjects.filter((p: any) => String(p.departmentId) === String(user?.departmentId));
                             if (list.length === 0) return <p>لا توجد مشاريع تخرج في قسمك</p>;
                             return (
-                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
                                 {list.map((p: any) => (
                                   <div key={p.id} style={{
-                                    border: '1px solid #000',
-                                    padding: '10px',
-                                    borderRadius: '8px',
-                                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                                  }}>
-                                    <h5 style={{ margin: '0 0 8px 0' }}>{p.name}</h5>
-                                    <p style={{ fontSize: 12, color: '#666', margin: '0 0 6px 0' }}>تم الرفع: {p.uploadedAt ? new Date(p.uploadedAt).toLocaleString() : ''}</p>
-                                    <p style={{ fontSize: 12, color: '#666', margin: '0 0 8px 0' }}>القسم: {departments.find((d: any) => d.id === p.departmentId)?.name || 'عام'}</p>
-                                    <a href={p.url} target="_blank" rel="noreferrer" style={{ padding: '6px 10px', background: '#1976d2', color: 'white', borderRadius: 4, textDecoration: 'none' }}>تحميل / عرض</a>
+                                    border: '2px solid #3f51b5',
+                                    padding: '20px',
+                                    borderRadius: '12px',
+                                    boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+                                    backgroundColor: '#e8eaf6',
+                                    transition: 'transform 0.2s',
+                                  }}
+                                  onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                                  onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                  >
+                                    <h5 style={{ margin: '0 0 10px 0', color: '#303f9f', fontSize: '18px', fontWeight: 'bold' }}>
+                                      🎓 {p.name}
+                                    </h5>
+                                    <p style={{ fontSize: 14, color: '#666', margin: '0 0 8px 0' }}>
+                                      📅 تم الرفع: {p.uploadedAt ? new Date(p.uploadedAt).toLocaleString('ar-SA') : ''}
+                                    </p>
+                                    <p style={{ fontSize: 14, color: '#666', margin: '0 0 15px 0' }}>
+                                      🏛️ القسم: {departments.find((d: any) => d.id === p.departmentId)?.name || 'عام'}
+                                    </p>
+                                    <a href={p.url} target="_blank" rel="noreferrer" style={{
+                                      padding: '10px 15px',
+                                      background: '#3f51b5',
+                                      color: 'white',
+                                      borderRadius: 6,
+                                      textDecoration: 'none',
+                                      fontWeight: 'bold',
+                                      display: 'inline-block'
+                                    }}>📥 تحميل / عرض</a>
                                   </div>
                                 ))}
                               </div>
                             );
                           })()}
+                        </div>
+                      </div>
+                    ) : viewModalType === 'previous_questions' && user.role === 'user' ? (
+                      <div style={{ padding: '20px' }}>
+                        <div style={{ textAlign: 'center', marginBottom: 12 }}>
+                          <h2>الأسئلة السابقة</h2>
+                        </div>
+                        <div>
+                          {previousQuestions.length === 0 ? (
+                            <p>لا توجد أسئلة سابقة في قسمك</p>
+                          ) : (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px' }}>
+                              {previousQuestions.map((question: any) => (
+                                <div key={question.id} style={{
+                                  border: '2px solid #1976d2',
+                                  padding: '20px',
+                                  borderRadius: '12px',
+                                  boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+                                  backgroundColor: '#f9f9f9',
+                                  transition: 'transform 0.2s',
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                >
+                                  <div style={{ marginBottom: '15px' }}>
+                                    <h4 style={{ margin: '0 0 10px 0', color: '#1976d2', fontSize: '18px', fontWeight: 'bold' }}>
+                                      ❓ {question.question}
+                                    </h4>
+                                  </div>
+                                  <div style={{
+                                    backgroundColor: '#e3f2fd',
+                                    padding: '15px',
+                                    borderRadius: '8px',
+                                    borderLeft: '4px solid #1976d2'
+                                  }}>
+                                    <p style={{ margin: '0', color: '#333', fontSize: '16px', lineHeight: '1.5' }}>
+                                      <strong>الإجابة:</strong> {question.answer}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     ) : viewModalType === 'library' && user.role === 'user' ? (
@@ -2065,18 +2277,42 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                             console.log('filtered books:', filteredBooks);
                             if (filteredBooks.length === 0) return <p>لا توجد كتب في قسمك</p>;
                             return (
-                              <div className={styles.bookGrid}>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
                                 {filteredBooks.map((book: any) => {
                                   const uploaderName = book.uploaderName || (() => {
                                     const uploader = users.find(u => u.id === book.uploaderId);
                                     return uploader ? (uploader.name || uploader.id) : 'غير معروف';
                                   })();
                                   return (
-                                    <div key={book.id} className={styles.bookCard}>
-                                      <h5 className={styles.bookTitle}>{book.title}</h5>
-                                      <p className={styles.bookDate}>تم الرفع بواسطة: {uploaderName}</p>
-                                      <p className={styles.bookDate}>تاريخ الإضافة: {new Date(book.createdAt).toLocaleDateString('ar-SA')}</p>
-                                      <a href={book.url} target="_blank" rel="noreferrer" className={styles.bookLink}>عرض / تحميل</a>
+                                    <div key={book.id} style={{
+                                      border: '2px solid #795548',
+                                      padding: '20px',
+                                      borderRadius: '12px',
+                                      boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+                                      backgroundColor: '#efebe9',
+                                      transition: 'transform 0.2s',
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                    >
+                                      <h5 style={{ margin: '0 0 10px 0', color: '#5d4037', fontSize: '18px', fontWeight: 'bold' }}>
+                                        📚 {book.title}
+                                      </h5>
+                                      <p style={{ color: '#666', fontSize: '14px', margin: '0 0 8px 0' }}>
+                                        👤 تم الرفع بواسطة: {uploaderName}
+                                      </p>
+                                      <p style={{ color: '#666', fontSize: '14px', margin: '0 0 15px 0' }}>
+                                        📅 تاريخ الإضافة: {new Date(book.createdAt).toLocaleDateString('ar-SA')}
+                                      </p>
+                                      <a href={book.url} target="_blank" rel="noreferrer" style={{
+                                        padding: '10px 15px',
+                                        background: '#795548',
+                                        color: 'white',
+                                        borderRadius: 6,
+                                        textDecoration: 'none',
+                                        fontWeight: 'bold',
+                                        display: 'inline-block'
+                                      }}>📖 عرض / تحميل</a>
                                     </div>
                                   );
                                 })}
@@ -2169,7 +2405,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
           <div style={{ background: 'white', padding: '20px', maxWidth: '600px', width: '90%', borderRadius: 8, position: 'relative', direction: 'rtl' }}>
             <button onClick={() => setAddModalType(null)} style={{ position: 'absolute', left: 8, top: 8, fontSize: 20, border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
             <h2 style={{ marginTop: 0, marginBottom: 16 }}>
-              {addModalType === 'subject' ? 'إضافة مادة جديدة' : addModalType === 'video' ? 'إضافة درس جديد' : addModalType === 'assignment' ? 'إضافة واجب جديد' : addModalType === 'department' ? 'إضافة قسم جديد' : addModalType === 'book' ? 'إضافة رابط كتاب' : 'إضافة طالب جديد'}
+              {addModalType === 'subject' ? 'إضافة مادة جديدة' : addModalType === 'video' ? 'إضافة درس جديد' : addModalType === 'assignment' ? 'إضافة واجب جديد' : addModalType === 'department' ? 'إضافة قسم جديد' : addModalType === 'book' ? 'إضافة رابط كتاب' : addModalType === 'previous_question' ? 'إضافة سؤال سابق' : 'إضافة طالب جديد'}
             </h2>
 
             {addModalType === 'subject' && (
@@ -2181,7 +2417,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             )}
 
             {addModalType === 'assignment' && (
-              <AddAssignmentForm subjects={subjects} onAdd={(title, question, answerType, options, correctAnswer, dueDate, subjectId) => { handleAddAssignment(title, question, answerType, options, correctAnswer, dueDate, subjectId); setAddModalType(null); }} />
+              <AddAssignmentForm subjects={subjects} onAdd={(title, question, answerType, options, correctAnswer, dueDate, subjectId, fileRequirement) => { handleAddAssignment(title, question, answerType, options, correctAnswer, dueDate, subjectId, fileRequirement); setAddModalType(null); }} />
             )}
 
             {addModalType === 'department' && (
@@ -2244,6 +2480,52 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                         </select>
                       );
                     })()}
+                  </div>
+                  <button type="submit" style={{ padding: '10px 20px', background: '#007bff', color: 'white', border: 'none', borderRadius: '5px' }}>إضافة</button>
+                </form>
+              </div>
+            )}
+
+            {addModalType === 'previous_question' && (
+              <div>
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  const formData = new FormData(e.target as HTMLFormElement);
+                  const question = formData.get('question') as string;
+                  const answer = formData.get('answer') as string;
+                  if (question && answer) {
+                    try {
+                      const res = await fetch('/api/previous_questions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ question, answer, departmentId: user.departmentId }),
+                      });
+                      if (res.ok) {
+                        showToast && showToast('تم إضافة السؤال بنجاح', 'success');
+                        setAddModalType(null);
+                        // reload previous questions
+                        const pqRes = await fetch(`/api/previous_questions?departmentId=${user.departmentId}`);
+                        if (pqRes.ok) {
+                          const pqBody = await pqRes.json();
+                          setPreviousQuestions(pqBody.previousQuestions || []);
+                        }
+                      } else {
+                        const error = await res.text();
+                        showToast && showToast('فشل في إضافة السؤال: ' + error, 'error');
+                      }
+                    } catch (err) {
+                      console.error(err);
+                      showToast && showToast('خطأ في الإضافة', 'error');
+                    }
+                  }
+                }}>
+                  <div style={{ marginBottom: '10px' }}>
+                    <label>السؤال</label>
+                    <textarea name="question" required style={{ width: '100%', padding: '8px', marginTop: '5px' }} />
+                  </div>
+                  <div style={{ marginBottom: '10px' }}>
+                    <label>الإجابة</label>
+                    <textarea name="answer" required style={{ width: '100%', padding: '8px', marginTop: '5px' }} />
                   </div>
                   <button type="submit" style={{ padding: '10px 20px', background: '#007bff', color: 'white', border: 'none', borderRadius: '5px' }}>إضافة</button>
                 </form>
@@ -2471,9 +2753,9 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       {viewModalType && user?.role !== 'user' && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
           <div style={{ background: 'white', padding: '20px', maxWidth: '800px', width: '90%', maxHeight: '80vh', overflow: 'auto', borderRadius: 8, position: 'relative', direction: 'rtl' }}>
-            <button onClick={() => setViewModalType(null)} style={{ position: 'absolute', left: 8, top: 8, fontSize: 20, border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
-            <h2 style={{ marginTop: 0, marginBottom: 16 }}>
-              {viewModalType === 'subjects' ? 'المواد الدراسية' : viewModalType === 'videos' ? 'الدروس التعليمية' : viewModalType === 'assignments' ? 'الواجبات' : viewModalType === 'departments' ? 'الأقسام الدراسية' : viewModalType === 'teachers' ? 'مديري القسم' : viewModalType === 'users' ? 'المستخدمين' : viewModalType === 'library' ? 'المكتبة' : 'الطلاب'}
+            <button onClick={() => setViewModalType(null)} style={{ position: 'sticky', top: 0, left: 8, fontSize: 20, border: 'none', background: 'white', cursor: 'pointer', zIndex: 10, padding: '4px' }}>✕</button>
+            <h2 style={{ marginTop: -32, marginBottom: 16 }}>
+              {viewModalType === 'subjects' ? 'المواد الدراسية' : viewModalType === 'videos' ? 'الدروس التعليمية' : viewModalType === 'assignments' ? 'الواجبات' : viewModalType === 'departments' ? 'الأقسام الدراسية' : viewModalType === 'teachers' ? 'مديري القسم' : viewModalType === 'users' ? 'المستخدمين' : viewModalType === 'library' ? 'المكتبة' : viewModalType === 'previous_questions' ? 'الأسئلة السابقة' : 'الطلاب'}
             </h2>
             {viewModalType === 'subjects' && (
               <div>
@@ -2629,9 +2911,27 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             )}
             {viewModalType === 'assignments' && (
               <div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={() => setAssignmentSortType('none')} style={{ padding: '6px 12px', fontSize: '13px', background: assignmentSortType === 'none' ? '#1976d2' : '#f0f0f0', color: assignmentSortType === 'none' ? 'white' : 'black', border: 'none', borderRadius: 4, cursor: 'pointer' }}>بدون فرز</button>
+                    <button onClick={() => setAssignmentSortType('name')} style={{ padding: '6px 12px', fontSize: '13px', background: assignmentSortType === 'name' ? '#1976d2' : '#f0f0f0', color: assignmentSortType === 'name' ? 'white' : 'black', border: 'none', borderRadius: 4, cursor: 'pointer' }}>الاسم</button>
+                    <button onClick={() => setAssignmentSortType('date')} style={{ padding: '6px 12px', fontSize: '13px', background: assignmentSortType === 'date' ? '#1976d2' : '#f0f0f0', color: assignmentSortType === 'date' ? 'white' : 'black', border: 'none', borderRadius: 4, cursor: 'pointer' }}>التاريخ</button>
+                  </div>
+                </div>
                 {assignments && assignments.length > 0 ? (
                   <div style={{ display: 'grid', gap: 10 }}>
-                    {assignments.map(a => (
+                    {(() => {
+                      let sorted = [...(assignments || [])];
+                      if (assignmentSortType === 'name') {
+                        sorted.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+                      } else if (assignmentSortType === 'date') {
+                        sorted.sort((a, b) => {
+                          const dateA = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+                          const dateB = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+                          return dateB - dateA;
+                        });
+                      }
+                      return sorted.map(a => (
                       <div key={a.id} style={{ border: '1px solid #000', padding: 10, borderRadius: 8 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                           <strong style={{ fontSize: '14px' }}>{a.title}</strong>
@@ -2643,27 +2943,34 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                         </div>
                         <p style={{ margin: 0, fontSize: '13px' }}>{a.question}</p>
                         {(user.role === 'department_manager' || user.role === 'teacher') && (
-                          <div style={{ marginTop: 8 }}>
-                            <h6 style={{ margin: '0 0 6px 0', fontSize: '12px' }}>التسليمات ({(a.completions || []).length})</h6>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                              {(a.completions || []).slice(0, 3).map((c: any, idx: number) => (
-                                <div key={idx} style={{ border: '1px solid #e0e0e0', padding: 6, borderRadius: 4, background: '#fafafa', fontSize: '11px' }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                                    <strong style={{ fontSize: '11px' }}>{c.userName || c.userId}</strong>
-                                    <span style={{ fontSize: '10px', color: '#999' }}>{c.date ? new Date(c.date).toLocaleString() : ''}</span>
+                          <div style={{ marginTop: 8, backgroundColor: '#f5f5f5', padding: '12px', borderRadius: '6px' }}>
+                            <h6 style={{ margin: '0 0 12px 0', fontSize: '13px', fontWeight: 'bold', color: '#333' }}>📋 التسليمات ({(a.completions || []).length})</h6>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                              {(a.completions || []).map((c: any, idx: number) => (
+                                <div key={idx} style={{ border: '1px solid #ddd', padding: '12px', borderRadius: '6px', background: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                    <strong style={{ fontSize: '12px', color: '#1976d2' }}>👤 {c.userName || c.userId}</strong>
+                                    <span style={{ fontSize: '11px', color: '#999' }}>📅 {c.date ? new Date(c.date).toLocaleString('ar-SA') : ''}</span>
                                   </div>
-                                  <div style={{ fontSize: '10px', padding: '4px 6px', background: 'white', borderRadius: 3, border: '1px solid #e0e0e0', wordBreak: 'break-word' }}>
-                                    {formatAnswer(c.answer, a.answerType)}
+                                  <div style={{ marginBottom: '10px', padding: '8px', background: '#f9f9f9', borderRadius: '4px', border: '1px solid #e0e0e0', fontSize: '12px', lineHeight: '1.5', color: '#333' }}>
+                                    <strong>الإجابة:</strong> {formatAnswer(c.answer, a.answerType)}
                                   </div>
+                                  {c.fileUrl && (
+                                    <div style={{ padding: '8px', backgroundColor: '#e3f2fd', borderRadius: '4px', border: '1px solid #90caf9' }}>
+                                      <a href={c.fileUrl} download target="_blank" rel="noopener noreferrer" style={{ color: '#1976d2', textDecoration: 'none', fontWeight: 'bold', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        📥 تحميل الملف
+                                      </a>
+                                    </div>
+                                  )}
                                 </div>
                               ))}
-                              {(a.completions || []).length > 3 && <p style={{ fontSize: '11px', color: '#666', margin: 0 }}>... و {(a.completions || []).length - 3} أخرى</p>}
-                              {(!a.completions || a.completions.length === 0) && <p style={{ color: '#999', fontSize: '11px', margin: 0 }}>لا توجد تسليمات</p>}
+                              {(!a.completions || a.completions.length === 0) && <p style={{ color: '#999', fontSize: '11px', margin: 0, fontStyle: 'italic' }}>لا توجد تسليمات بعد</p>}
                             </div>
                           </div>
                         )}
                       </div>
-                    ))}
+                    ));
+                    })()}
                   </div>
                 ) : (
                   <p>لا توجد واجبات</p>
@@ -2906,6 +3213,50 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                 })()}
               </div>
             )}
+            {viewModalType === 'previous_questions' && (
+              <div>
+                {previousQuestions.length === 0 ? (
+                  <p>لا توجد أسئلة سابقة</p>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px' }}>
+                    {previousQuestions.map((question: any) => (
+                      <div key={question.id} style={{
+                        border: '2px solid #1976d2',
+                        padding: '20px',
+                        borderRadius: '12px',
+                        boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+                        backgroundColor: '#f9f9f9',
+                        transition: 'transform 0.2s',
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                      onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                      >
+                        <div style={{ marginBottom: '15px' }}>
+                          <h4 style={{ margin: '0 0 10px 0', color: '#1976d2', fontSize: '18px', fontWeight: 'bold' }}>
+                            ❓ {question.question}
+                          </h4>
+                        </div>
+                        <div style={{
+                          backgroundColor: '#e3f2fd',
+                          padding: '15px',
+                          borderRadius: '8px',
+                          borderLeft: '4px solid #1976d2'
+                        }}>
+                          <p style={{ margin: '0', color: '#333', fontSize: '16px', lineHeight: '1.5' }}>
+                            <strong>الإجابة:</strong> {question.answer}
+                          </p>
+                        </div>
+                        <div style={{ marginTop: '15px', display: 'flex', gap: '8px' }}>
+                          {user?.role === 'department_manager' && (
+                            <button onClick={() => handleDeletePreviousQuestion(question.id)} style={{ padding: '8px 12px', background: '#f44336', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>حذف</button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             {viewModalType === 'teachers' && (
               <div>
                 {filteredTeachers.length === 0 ? (
@@ -3132,7 +3483,7 @@ function AddVideoForm({ subjects, onAdd }: { subjects: any[]; onAdd: (title: str
   );
 }
 
-function AddAssignmentForm({ subjects, onAdd }: { subjects?: any[]; onAdd: (title: string, question: string, answerType: string, options?: string[], correctAnswer?: string, dueDate?: string, subjectId?: string) => void }) {
+function AddAssignmentForm({ subjects, onAdd }: { subjects?: any[]; onAdd: (title: string, question: string, answerType: string, options?: string[], correctAnswer?: string, dueDate?: string, subjectId?: string, fileRequirement?: string) => void }) {
   const [title, setTitle] = useState('');
   const [question, setQuestion] = useState('');
   const [answerType, setAnswerType] = useState('choice');
@@ -3140,24 +3491,37 @@ function AddAssignmentForm({ subjects, onAdd }: { subjects?: any[]; onAdd: (titl
   const [correctAnswer, setCorrectAnswer] = useState('');
   const [due, setDue] = useState('');
   const [subjectId, setSubjectId] = useState('');
+  const [fileRequirement, setFileRequirement] = useState('none');
 
   const inputStyle: React.CSSProperties = { width: '100%', padding: '10px', borderRadius: 6, border: '1px solid #ccc', fontSize: 14 };
   const btnStyle: React.CSSProperties = { padding: '10px 14px', background: '#000', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer' };
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); const opts = optionsText ? optionsText.split('|').map(s => s.trim()).filter(Boolean) : undefined; onAdd(title, question, answerType, opts, correctAnswer || undefined, due || undefined, subjectId || undefined); setTitle(''); setQuestion(''); setAnswerType('choice'); setOptionsText(''); setCorrectAnswer(''); setDue(''); setSubjectId(''); }} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <form onSubmit={(e) => { e.preventDefault(); const opts = optionsText ? optionsText.split('|').map(s => s.trim()).filter(Boolean) : undefined; const finalAnswerType = fileRequirement === 'required' ? 'essay' : answerType; onAdd(title, question, finalAnswerType, opts, correctAnswer || undefined, due || undefined, subjectId || undefined, fileRequirement); setTitle(''); setQuestion(''); setAnswerType('choice'); setOptionsText(''); setCorrectAnswer(''); setDue(''); setSubjectId(''); setFileRequirement('none'); }} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <label>اسم الدرس / عنوان الواجب</label>
       <input value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="مثال: واجب الأسبوع 1" style={inputStyle} />
 
       <label>السؤال</label>
       <textarea value={question} onChange={(e) => setQuestion(e.target.value)} rows={3} required placeholder="نص السؤال" style={{ ...inputStyle, resize: 'vertical' }} />
 
-      <label>نوع الإجابة</label>
-      <select value={answerType} onChange={(e) => setAnswerType(e.target.value)} required style={inputStyle}>
-        <option value="choice">اختيار من متعدد</option>
-        <option value="tf">صح / خطأ</option>
-        <option value="essay">مقالي</option>
+      {fileRequirement !== 'required' && (
+        <>
+          <label>نوع الإجابة</label>
+          <select value={answerType} onChange={(e) => setAnswerType(e.target.value)} required style={inputStyle}>
+            <option value="choice">اختيار من متعدد</option>
+            <option value="tf">صح / خطأ</option>
+            <option value="essay">مقالي</option>
+          </select>
+        </>
+      )}
+
+      <label>متطلبات الملف</label>
+      <select value={fileRequirement} onChange={(e) => setFileRequirement(e.target.value)} style={inputStyle}>
+        <option value="none">لا يوجد ملف</option>
+        <option value="optional">ملف اختياري</option>
+        <option value="required">ملف مطلوب</option>
       </select>
+
 
       {answerType === 'choice' && (
         <>
@@ -3191,66 +3555,100 @@ function AddAssignmentForm({ subjects, onAdd }: { subjects?: any[]; onAdd: (titl
 
       <div style={{ display: 'flex', gap: 8 }}>
         <button type="submit" style={btnStyle}>أضف الواجب</button>
-        <button type="button" onClick={() => { setTitle(''); setQuestion(''); setAnswerType('choice'); setOptionsText(''); setCorrectAnswer(''); setDue(''); setSubjectId(''); }} style={{ padding: '10px 14px', borderRadius: 6, border: '1px solid #ccc', background: 'white', cursor: 'pointer' }}>مسح</button>
+        <button type="button" onClick={() => { setTitle(''); setQuestion(''); setAnswerType('choice'); setOptionsText(''); setCorrectAnswer(''); setDue(''); setSubjectId(''); setFileRequirement('none'); }} style={{ padding: '10px 14px', borderRadius: 6, border: '1px solid #ccc', background: 'white', cursor: 'pointer' }}>مسح</button>
       </div>
     </form>
   );
 }
 
-function ChoiceAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => Promise<boolean> }) {
+function ChoiceAnswer({ a, onComplete }: { a: any; onComplete: (ans: string, file?: File) => Promise<boolean> }) {
   const [selected, setSelected] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const fileRequired = a.fileRequirement === 'required';
+  const fileAllowed = a.fileRequirement === 'optional' || a.fileRequirement === 'required';
   const handleSubmit = async () => {
-    if (!selected) return;
+    if ((!selected && !fileRequired) || (fileRequired && !file)) return;
     if (!confirm('هل أنت متأكد من إرسال إجابتك؟ لا يمكنك تغييرها لاحقاً.')) return;
-    await onComplete(selected);
+    await onComplete(selected, file || undefined);
   };
   return (
     <div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {(a.options || []).map((opt: string, idx: number) => (
-          <label key={idx} style={{ display: 'block' }}>
-            <input type="radio" name={`choice-${a.id}`} value={opt} checked={selected === opt} onChange={() => setSelected(opt)} /> {opt}
-          </label>
-        ))}
-      </div>
+      {!fileRequired && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {(a.options || []).map((opt: string, idx: number) => (
+            <label key={idx} style={{ display: 'block' }}>
+              <input type="radio" name={`choice-${a.id}`} value={opt} checked={selected === opt} onChange={() => setSelected(opt)} /> {opt}
+            </label>
+          ))}
+        </div>
+      )}
+      {fileAllowed && (
+        <div style={{ marginTop: 8, marginBottom: 8 }}>
+          <label>أرفق ملف {fileRequired ? '(مطلوب)' : '(اختياري)'}:</label>
+          <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} required={fileRequired} style={{ width: '100%', padding: 8, border: '1px solid #ccc', borderRadius: 4 }} />
+        </div>
+      )}
       <div style={{ marginTop: 8 }}>
-        <button onClick={handleSubmit} disabled={!selected} style={{ padding: '10px 20px', background: selected ? '#007bff' : '#ccc', color: 'white', border: 'none', borderRadius: '5px', cursor: selected ? 'pointer' : 'not-allowed' }}>أجب</button>
+        <button onClick={handleSubmit} disabled={(!selected && !fileRequired) || (fileRequired && !file)} style={{ padding: '10px 20px', background: ((selected || fileRequired) && (!fileRequired || file)) ? '#007bff' : '#ccc', color: 'white', border: 'none', borderRadius: '5px', cursor: ((selected || fileRequired) && (!fileRequired || file)) ? 'pointer' : 'not-allowed' }}>أجب</button>
       </div>
     </div>
   );
 }
 
-function TFAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => Promise<boolean> }) {
+function TFAnswer({ a, onComplete }: { a: any; onComplete: (ans: string, file?: File) => Promise<boolean> }) {
   const [val, setVal] = useState('true');
+  const [file, setFile] = useState<File | null>(null);
+  const fileRequired = a.fileRequirement === 'required';
+  const fileAllowed = a.fileRequirement === 'optional' || a.fileRequirement === 'required';
   const handleSubmit = async () => {
+    if ((fileRequired && !file)) return;
     if (!confirm('هل أنت متأكد من إرسال إجابتك؟ لا يمكنك تغييرها لاحقاً.')) return;
-    await onComplete(val);
+    await onComplete(val, file || undefined);
   };
   return (
     <div>
-      <div>
-        <label style={{ marginRight: 8 }}><input type="radio" name={`tf-${a.id}`} value="true" checked={val === 'true'} onChange={() => setVal('true')} /> صح</label>
-        <label><input type="radio" name={`tf-${a.id}`} value="false" checked={val === 'false'} onChange={() => setVal('false')} /> خطأ</label>
-      </div>
+      {!fileRequired && (
+        <div>
+          <label style={{ marginRight: 8 }}><input type="radio" name={`tf-${a.id}`} value="true" checked={val === 'true'} onChange={() => setVal('true')} /> صح</label>
+          <label><input type="radio" name={`tf-${a.id}`} value="false" checked={val === 'false'} onChange={() => setVal('false')} /> خطأ</label>
+        </div>
+      )}
+      {fileAllowed && (
+        <div style={{ marginTop: 8, marginBottom: 8 }}>
+          <label>أرفق ملف {fileRequired ? '(مطلوب)' : '(اختياري)'}:</label>
+          <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} required={fileRequired} style={{ width: '100%', padding: 8, border: '1px solid #ccc', borderRadius: 4 }} />
+        </div>
+      )}
       <div style={{ marginTop: 8 }}>
-        <button onClick={handleSubmit} style={{ padding: '10px 20px', background: '#007bff', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>أجب</button>
+        <button onClick={handleSubmit} disabled={fileRequired && !file} style={{ padding: '10px 20px', background: (!fileRequired || file) ? '#007bff' : '#ccc', color: 'white', border: 'none', borderRadius: '5px', cursor: (!fileRequired || file) ? 'pointer' : 'not-allowed' }}>أجب</button>
       </div>
     </div>
   );
 }
 
-function EssayAnswer({ a, onComplete }: { a: any; onComplete: (ans: string) => Promise<boolean> }) {
+function EssayAnswer({ a, onComplete }: { a: any; onComplete: (ans: string, file?: File) => Promise<boolean> }) {
   const [text, setText] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const fileRequired = a.fileRequirement === 'required';
+  const fileAllowed = a.fileRequirement === 'optional' || a.fileRequirement === 'required';
   const handleSubmit = async () => {
-    if (!text.trim()) return;
+    if ((!text.trim() && !fileRequired) || (fileRequired && !file)) return;
     if (!confirm('هل أنت متأكد من إرسال إجابتك؟ لا يمكنك تغييرها لاحقاً.')) return;
-    await onComplete(text);
+    await onComplete(text, file || undefined);
   };
   return (
     <div>
-      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} style={{ width: '100%', padding: 8 }} />
+      {!fileRequired && (
+        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} style={{ width: '100%', padding: 8, marginBottom: 8 }} placeholder="اكتب إجابتك هنا..." />
+      )}
+      {fileAllowed && (
+        <div style={{ marginBottom: 8 }}>
+          <label>أرفق ملف {fileRequired ? '(مطلوب)' : '(اختياري)'}:</label>
+          <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} required={fileRequired} style={{ width: '100%', padding: 8, border: '1px solid #ccc', borderRadius: 4 }} />
+        </div>
+      )}
       <div style={{ marginTop: 8 }}>
-        <button onClick={handleSubmit} disabled={!text.trim()} style={{ padding: '10px 20px', background: text.trim() ? '#007bff' : '#ccc', color: 'white', border: 'none', borderRadius: '5px', cursor: text.trim() ? 'pointer' : 'not-allowed' }}>أجب</button>
+        <button onClick={handleSubmit} disabled={(!text.trim() && !fileRequired) || (fileRequired && !file)} style={{ padding: '10px 20px', background: ((text.trim() || fileRequired) && (!fileRequired || file)) ? '#007bff' : '#ccc', color: 'white', border: 'none', borderRadius: '5px', cursor: ((text.trim() || fileRequired) && (!fileRequired || file)) ? 'pointer' : 'not-allowed' }}>أجب</button>
       </div>
     </div>
   );
