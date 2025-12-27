@@ -1,20 +1,20 @@
 [
   {
-    "title": "ؤءؤر",
-    "question": "ؤءرء",
+    "title": "سسس",
+    "question": "سسس",
     "answerType": "essay",
     "departmentId": "1765101996438",
     "subjectId": "1766408076209",
     "fileRequirement": "required",
-    "id": "a_1766819319281",
-    "createdAt": "2025-12-27T07:08:39.281Z",
+    "id": "a_1766820032831",
+    "createdAt": "2025-12-27T07:20:32.831Z",
     "completions": [
       {
         "answer": "",
         "userId": "a",
         "userName": "a",
-        "date": "2025-12-27T07:08:54.267Z",
-        "fileUrl": "/api/uploads/assignments/1766819334254-Building_Systems_Spare_Parts.xlsx"
+        "date": "2025-12-27T07:20:51.536Z",
+        "fileUrl": "/api/uploads/assignments/1766820051532-pngegg.png"
       }
     ]
   }
