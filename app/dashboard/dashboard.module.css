@@ -1,0 +1,604 @@
+.container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, #e3f2fd 0%, #f8f9fa 100%);
+  font-family: 'Tajawal', 'Cairo', system-ui, -apple-system, sans-serif;
+  direction: rtl;
+  position: relative;
+}
+
+.container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="1" fill="%23ffffff" opacity="0.1"/></svg>') repeat;
+  pointer-events: none;
+}
+
+.navbar {
+  background: linear-gradient(135deg, #1976d2 0%, #0d47a1 100%);
+  color: white;
+  padding: 1rem 2rem;
+  box-shadow: 0 4px 20px rgba(25, 118, 210, 0.3);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(10px);
+}
+
+.navContent {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.navbar h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: 0.3px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.userMenu {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-weight: 500;
+}
+
+.logoutBtn {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  padding: 0.5rem 1rem;
+  border-radius: 25px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.logoutBtn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.adminLink {
+  color: white;
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 25px;
+  transition: all 0.3s ease;
+  font-size: 0.875rem;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.adminLink:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.main {
+  flex: 1;
+  padding: 2rem 1rem;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.card {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  overflow: hidden;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+}
+
+.cardHeader {
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  padding: 2rem;
+  border-bottom: 2px solid #e3f2fd;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.cardHeader h2 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #0d47a1;
+  margin: 0;
+  letter-spacing: 0.3px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.role {
+  background: linear-gradient(135deg, #1976d2 0%, #0d47a1 100%);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);
+}
+
+.content {
+  padding: 2rem;
+}
+
+.content > p {
+  font-size: 1.125rem;
+  margin-bottom: 2rem;
+  color: #424242;
+  line-height: 1.6;
+}
+
+.adminFeatures,
+.userFeatures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.feature {
+  background: linear-gradient(135deg, #e3f2fd 0%, #f8f9fa 100%);
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid #bbdefb;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.feature::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(25, 118, 210, 0.1) 0%, rgba(13, 71, 161, 0.1) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.feature:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(25, 118, 210, 0.2);
+}
+
+.feature:hover::before {
+  opacity: 1;
+}
+
+.feature h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #0d47a1;
+  margin: 0 0 0.5rem 0;
+  position: relative;
+  z-index: 1;
+}
+
+.feature p {
+  font-size: 0.875rem;
+  color: #616161;
+  margin: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  font-size: 1.125rem;
+  color: #616161;
+}
+
+@media (max-width: 768px) {
+  .navContent {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .navbar h1 {
+    width: 100%;
+  }
+
+  .main {
+    padding: 1rem;
+  }
+
+  .cardHeader {
+    padding: 1.5rem;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .cardHeader h2 {
+    font-size: 1.5rem;
+  }
+
+  .content {
+    padding: 1.5rem;
+  }
+
+  .adminFeatures,
+  .userFeatures {
+    grid-template-columns: 1fr;
+  }
+}
+
+.logo {
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
+  transition: all 0.3s ease;
+}
+
+.logo:hover {
+  transform: scale(1.05);
+}
+
+@media (min-width: 768px) {
+  .logo {
+    width: 110px;
+    height: auto;
+  }
+}
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.cardItem {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  border: 1px solid #e3f2fd;
+  padding: 1.5rem;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.cardItem::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(25, 118, 210, 0.05) 0%, rgba(13, 71, 161, 0.05) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.cardItem:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(25, 118, 210, 0.15);
+}
+
+.cardItem:hover::before {
+  opacity: 1;
+}
+
+.cardItemContent {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.cardItem h4 {
+  margin: 0;
+  text-align: left;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #0d47a1;
+  position: relative;
+  z-index: 1;
+}
+
+.cardItem img {
+  width: 32px;
+  height: 32px;
+  position: relative;
+  z-index: 1;
+}
+
+.cardItemActions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  position: relative;
+  z-index: 1;
+}
+
+.cardItemActions p {
+  margin: 0 0 0.5rem 0;
+  text-align: left;
+  cursor: pointer;
+  color: #424242;
+  transition: color 0.3s ease;
+}
+
+.cardItemActions p:hover {
+  color: #1976d2;
+}
+
+.searchSection {
+  margin-bottom: 20px;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 10px;
+  border-radius: 4px;
+  border: 1px solid #000;
+  font-size: 14px;
+}
+
+/* modal departments list container */
+.modalListContainer {
+  max-height: 380px;
+  overflow-y: auto;
+  padding-right: 8px;
+  margin-bottom: 8px;
+}
+
+.modalListContainer::-webkit-scrollbar {
+  width: 10px;
+}
+.modalListContainer::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #90caf9, #1565c0);
+  border-radius: 8px;
+}
+
+
+.tabs {
+  margin-bottom: 20px;
+  display: flex;
+  gap: 10px;
+  border-bottom: 1px solid #000;
+  padding-bottom: 10px;
+}
+
+/* Student header (right-aligned for RTL) */
+.userHeader {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 12px;
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+  border-left: 1px solid #e6eefb;
+  z-index: 9999;
+  box-shadow: -6px 0 20px rgba(13,71,161,0.04);
+}
+
+.userInfo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.userAvatar {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid rgba(13,71,161,0.06);
+}
+
+.userText { text-align: center; width: 100%; }
+.userName { font-weight: 700; color: #0d47a1; }
+.userDept { font-size: 0.95rem; color: #555; }
+
+.userActions { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 6px; }
+.actionBtn {
+  background: transparent;
+  border: none;
+  padding: 10px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+  color: #0d47a1;
+  width: 100%;
+  text-align: center;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+.actionBtn:hover { background-color: rgba(13,71,161,0.06); }
+
+/* when sidebar present, reserve space for main content */
+.hasUserSidebar .main {
+  margin-right: 300px;
+}
+
+/* responsive: collapse sidebar on small screens */
+@media (max-width: 768px) {
+  .userHeader { position: relative; width: 100%; height: auto; flex-direction: row; justify-content: space-between; padding: 12px; box-shadow: none; border-left: none; }
+  .userInfo { flex-direction: row; align-items: center; text-align: right; }
+  .userText { text-align: right; }
+  .userActions { flex-direction: row; flex-wrap: wrap; gap: 6px; width: auto; }
+  .hasUserSidebar .main { margin-right: 0; }
+}
+
+.tabButton {
+  padding: 10px 20px;
+  background: #f0f0f0;
+  color: #333;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.tabButton.active {
+  background: #1565c0;
+  color: white;
+}
+
+.addForm {
+  margin-bottom: 30px;
+  padding: 20px;
+  border: 1px solid #000;
+  border-radius: 8px;
+}
+
+.departmentsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.departmentCard {
+  border: 1px solid #000;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.cardTitle {
+  margin: 0 0 10px 0;
+}
+
+.cardDesc {
+  color: #666;
+  font-size: 14px;
+  margin: 0 0 15px 0;
+}
+
+.cardActions {
+  display: flex;
+  gap: 8px;
+}
+
+.editBtn {
+  padding: 8px 16px;
+  background: #0d47a1;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.deleteBtn {
+  padding: 8px 16px;
+  background: #d32f2f;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.noData {
+  color: #000;
+}
+
+.subTabs {
+  margin-bottom: 20px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.subTabButton {
+  padding: 12px 20px;
+  background: #f0f0f0;
+  color: #333;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.subTabButton.active {
+  background: #0d47a1;
+  color: white;
+}
+
+.bookGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.bookCard {
+  border: 1px solid #000;
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  cursor: pointer;
+}
+
+.bookCard:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+}
+
+.bookTitle {
+  margin: 0 0 8px 0;
+}
+
+.bookDate {
+  color: #666;
+  font-size: 14px;
+  margin: 0 0 5px 0;
+}
+
+.bookLink {
+  padding: 4px 8px;
+  background: #1976d2;
+  color: white;
+  border-radius: 4px;
+  text-decoration: none;
+  font-size: 12px;
+}
