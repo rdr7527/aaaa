@@ -964,7 +964,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   };
   const [addModalType, setAddModalType] = useState<'subject' | 'video' | 'assignment' | 'student' | 'department' | 'teacher' | 'book' | 'previous_question' | null>(null);
 
-  const [viewModalType, setViewModalType] = useState<'subjects' | 'videos' | 'assignments' | 'students' | 'departments' | 'teachers' | 'users' | 'deptSubjects' | 'graduation_projects' | 'library' | 'previous_questions' | null>(null);
+  const [viewModalType, setViewModalType] = useState<'subjects' | 'videos' | 'assignments' | 'students' | 'departments' | 'teachers' | 'users' | 'deptSubjects' | 'graduation_projects' | 'library' | 'previous_questions' | 'view_subject_students' | null>(null);
 
   function getYoutubeEmbedUrl(url: string): string | null {
     try {
@@ -999,7 +999,6 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   };
   const closeVideo = () => {
     setSelectedVideo(null);
-    if (player) player.destroy();
   };
 
   const markVideoAsCompleted = async (videoId: string) => {
@@ -2028,6 +2027,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                           </div>
                           <div className={styles.cardItemActions}>
                             <p onClick={(e) => { e.stopPropagation(); (async () => { if (user?.departmentId) await loadDepartmentData(user.departmentId); setShowAddStudentModal(true); })(); }} style={{ color: '#1565c0', fontWeight: '500', cursor: 'pointer' }}>➕ إضافة طالب للمادة</p>
+                            <p onClick={(e) => { e.stopPropagation(); setViewStudentsSubjectId(null); setViewModalType('view_subject_students'); }} style={{ color: '#2196f3', fontWeight: '600', cursor: 'pointer' }}>👥 عرض طلاب المادة</p>
                             <p onClick={(e) => { e.stopPropagation(); setViewModalType('subjects'); }} style={{ color: '#2196f3', fontWeight: '600', cursor: 'pointer' }}>📚 المواد التي تدرسها ({subjects.filter(s => s.teacherId === user.id).length})</p>
                           </div>
                         </div>
@@ -2206,6 +2206,94 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                             <p>لا توجد واجبات</p>
                           )}
                         </div>
+                      </div>
+                    ) : viewModalType === 'view_subject_students' && user.role === 'teacher' ? (
+                      <div style={{ padding: '20px', direction: 'rtl' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                          <h2 style={{ color: '#1565c0', margin: 0 }}>👥 عرض طلاب المادة</h2>
+                          <button onClick={() => { setViewModalType(null); setViewStudentsSubjectId(null); }} style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #ccc', background: '#fff', cursor: 'pointer', fontWeight: 'bold' }}>إغلاق</button>
+                        </div>
+
+                        {!viewStudentsSubjectId ? (
+                          <div>
+                            <p style={{ color: '#666', marginBottom: '20px', fontSize: '16px' }}>اختر مادة لعرض الطلاب المسجلين فيها:</p>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '15px' }}>
+                              {subjects.filter(s => s.teacherId === user.id).length === 0 ? (
+                                <p style={{ color: '#999' }}>لا توجد مواد لك</p>
+                              ) : (
+                                subjects.filter(s => s.teacherId === user.id).map(subject => (
+                                  <div key={subject.id} onClick={() => setViewStudentsSubjectId(subject.id)} style={{
+                                    border: '2px solid #2196f3',
+                                    padding: '15px',
+                                    borderRadius: '10px',
+                                    background: 'linear-gradient(135deg, #e3f2fd 0%, #fff 100%)',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    boxShadow: '0 2px 8px rgba(33, 150, 243, 0.15)'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(-4px)';
+                                    e.currentTarget.style.boxShadow = '0 4px 16px rgba(33, 150, 243, 0.25)';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(33, 150, 243, 0.15)';
+                                  }}
+                                  >
+                                    <h4 style={{ color: '#1565c0', margin: '0 0 10px 0', fontSize: '18px', fontWeight: 'bold' }}>📚 {subject.name}</h4>
+                                    <p style={{ color: '#666', margin: '0 0 8px 0', fontSize: '14px' }}>الطلاب: {(subject.students || []).length}</p>
+                                    <p style={{ color: '#999', margin: '0', fontSize: '13px', fontStyle: 'italic' }}>{subject.description}</p>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <div style={{ marginBottom: '20px' }}>
+                              <button onClick={() => setViewStudentsSubjectId(null)} style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #2196f3', background: '#e3f2fd', color: '#1565c0', cursor: 'pointer', fontWeight: 'bold' }}>← العودة للمواد</button>
+                            </div>
+                            <div style={{ marginBottom: '20px' }}>
+                              <h3 style={{ color: '#1565c0', margin: '0 0 15px 0' }}>📋 المادة: {subjects.find(s => s.id === viewStudentsSubjectId)?.name}</h3>
+                              {(() => {
+                                const subject = subjects.find(s => s.id === viewStudentsSubjectId);
+                                const studentList = subject?.students || [];
+                                if (studentList.length === 0) {
+                                  return <p style={{ color: '#999', fontSize: '16px', textAlign: 'center', padding: '40px 20px' }}>لا يوجد طلاب مسجلون في هذه المادة</p>;
+                                }
+                                return (
+                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '15px' }}>
+                                    {studentList.map((studentId: string) => {
+                                      const student = users.find(u => u.id === studentId);
+                                      return (
+                                        <div key={studentId} style={{
+                                          border: '2px solid #4caf50',
+                                          padding: '15px',
+                                          borderRadius: '10px',
+                                          background: 'linear-gradient(135deg, #f1f8f6 0%, #fff 100%)',
+                                          boxShadow: '0 2px 8px rgba(76, 175, 80, 0.15)'
+                                        }}>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                                            <span style={{ fontSize: '24px' }}>👤</span>
+                                            <div>
+                                              <p style={{ color: '#2e7d32', fontWeight: 'bold', margin: '0', fontSize: '16px' }}>{student?.name || studentId}</p>
+                                              <p style={{ color: '#666', margin: '0', fontSize: '13px' }}>المعرف: {studentId}</p>
+                                            </div>
+                                          </div>
+                                          {student?.departmentId && (
+                                            <p style={{ color: '#666', fontSize: '13px', margin: '8px 0 0 0' }}>
+                                              🏛️ القسم: {departments.find(d => d.id === student.departmentId)?.name || 'غير محدد'}
+                                            </p>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ) : viewModalType === 'videos' && user.role === 'user' ? (
                       <div style={{ padding: '20px' }}>

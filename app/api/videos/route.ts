@@ -28,6 +28,7 @@ export async function POST(req: Request) {
     title: body.title,
     url: body.url,
     description: body.description || '',
+    lessonFile: body.lessonFile || null,
   };
   if (!subject.videos) subject.videos = [];
   subject.videos.push(video);

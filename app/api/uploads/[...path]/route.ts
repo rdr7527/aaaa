@@ -5,7 +5,7 @@ import path from 'path';
 export async function GET(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   try {
     const { path: filePathArray } = await params;
-    const filePath = path.join(process.cwd(), 'uploads', ...filePathArray);
+    const filePath = path.join(process.cwd(), 'public', 'uploads', ...filePathArray);
     if (!fs.existsSync(filePath)) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
@@ -20,6 +20,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
       '.jpeg': 'image/jpeg',
       '.png': 'image/png',
       '.gif': 'image/gif',
+      '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      '.xls': 'application/vnd.ms-excel',
     };
     const contentType = mimeTypes[ext] || 'application/octet-stream';
     return new NextResponse(file, {
