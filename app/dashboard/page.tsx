@@ -53,6 +53,7 @@ export default function Dashboard() {
   const [addStudentSubjectId, setAddStudentSubjectId] = useState<string | null>(null);
   const [addStudentId, setAddStudentId] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [viewStudentsSubjectId, setViewStudentsSubjectId] = useState<string | null>(null);
 
 const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   
@@ -501,18 +502,73 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     }
   };
 
-  const handleAddVideo = async (title: string, url: string, description: string, subjectId: string) => {
+  const handleAddVideo = async (title: string, url: string, description: string, subjectId: string, file?: File) => {
     if (!user?.departmentId) return;
     try {
-      const res = await fetch('/api/videos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ title, url, description, departmentId: user.departmentId, subjectId }),
-      });
-      if (res.ok) loadDepartmentData(user.departmentId);
+      if (file) {
+        // If there's a file, upload it first
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('type', 'lesson');
+        
+        console.log('بدء رفع الملف:', file.name);
+        
+        const uploadRes = await fetch('/api/uploads', {
+          method: 'POST',
+          credentials: 'include',
+          body: formData,
+        });
+        
+        if (!uploadRes.ok) {
+          const errorText = await uploadRes.text();
+          console.error('فشل رفع الملف:', uploadRes.status, errorText);
+          alert(`فشل رفع الملف: ${uploadRes.status}`);
+          return;
+        }
+        
+        const uploadData = await uploadRes.json();
+        const fileUrl = uploadData.url;
+        console.log('تم رفع الملف بنجاح:', fileUrl);
+        
+        // Then create the video with the file reference
+        const res = await fetch('/api/videos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ title, url, description, departmentId: user.departmentId, subjectId, lessonFile: fileUrl }),
+        });
+        
+        if (res.ok) {
+          console.log('تم إضافة الفيديو بنجاح مع الملف');
+          alert('تم إضافة الدرس مع الملف بنجاح');
+          loadDepartmentData(user.departmentId);
+        } else {
+          const errorText = await res.text();
+          console.error('فشل إضافة الفيديو:', res.status, errorText);
+          alert(`فشل إضافة الدرس: ${res.status}`);
+        }
+      } else {
+        // No file, just create the video
+        const res = await fetch('/api/videos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ title, url, description, departmentId: user.departmentId, subjectId }),
+        });
+        
+        if (res.ok) {
+          console.log('تم إضافة الفيديو بنجاح بدون ملف');
+          alert('تم إضافة الدرس بنجاح');
+          loadDepartmentData(user.departmentId);
+        } else {
+          const errorText = await res.text();
+          console.error('فشل إضافة الفيديو:', res.status, errorText);
+          alert(`فشل إضافة الدرس: ${res.status}`);
+        }
+      }
     } catch (e) {
-      console.error(e);
+      console.error('خطأ في إضافة الفيديو:', e);
+      alert('حدث خطأ: ' + (e instanceof Error ? e.message : String(e)));
     }
   };
 
@@ -671,7 +727,6 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
   const [selectedVideo, setSelectedVideo] = useState<{ video: any; subjectId?: string } | null>(null);
   const [apiLoaded, setApiLoaded] = useState(false);
-  const playerRef = React.useRef<HTMLDivElement>(null);
 
   // Graduation projects states
   const [graduationProjects, setGraduationProjects] = useState<any[]>([]);
@@ -973,29 +1028,51 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     }
   }, []);
 
-  let player: any = null;
+  const playerRef = React.useRef<any>(null);
 
   useEffect(() => {
-    if (selectedVideo && apiLoaded && playerRef.current) {
-      if (player) player.destroy();
+    if (selectedVideo && apiLoaded) {
+      if (playerRef.current) {
+        try {
+          playerRef.current.destroy();
+        } catch (e) {
+          console.error('Error destroying player:', e);
+        }
+        playerRef.current = null;
+      }
+      
       const videoId = getVideoId(selectedVideo.video.url);
       if (videoId) {
-        player = new (window as any).YT.Player(playerRef.current, {
-          height: '360',
-          width: '100%',
-          videoId,
-          events: {
-            onStateChange: (event: any) => {
-              if (event.data === (window as any).YT.PlayerState.ENDED) {
-                markVideoAsCompleted(selectedVideo.video.id);
+        const playerDiv = document.getElementById('yt-player');
+        if (playerDiv) {
+          try {
+            playerRef.current = new (window as any).YT.Player(playerDiv, {
+              height: '360',
+              width: '100%',
+              videoId,
+              events: {
+                onStateChange: (event: any) => {
+                  if (event.data === (window as any).YT.PlayerState.ENDED) {
+                    markVideoAsCompleted(selectedVideo.video.id);
+                  }
+                }
               }
-            }
+            });
+          } catch (e) {
+            console.error('Error creating player:', e);
           }
-        });
+        }
       }
     }
     return () => {
-      if (player) player.destroy();
+      if (playerRef.current) {
+        try {
+          playerRef.current.destroy();
+        } catch (e) {
+          console.error('Error destroying player:', e);
+        }
+        playerRef.current = null;
+      }
     };
   }, [selectedVideo, apiLoaded]);
 
@@ -1246,30 +1323,59 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       )}
 
       {showAddStudentModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000 }}>
-          <div style={{ background: 'white', padding: 18, borderRadius: 8, width: 520, maxWidth: '95%', direction: 'rtl' }}>
-            <button onClick={() => { setShowAddStudentModal(false); setAddStudentSubjectId(null); setAddStudentId(null); }} style={{ position: 'absolute', left: 12, top: 12, fontSize: 20, border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
-            <h3 style={{ marginTop: 0 }}>إضافة طالب للمادة</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <label>اختر المادة (أنت مدرسها)</label>
-              <select value={addStudentSubjectId || ''} onChange={(e) => setAddStudentSubjectId(e.target.value || null)} style={{ padding: 8, borderRadius: 4, border: '1px solid #ccc' }}>
-                <option value="">-- اختر المادة --</option>
-                {subjects.filter(s => s.teacherId === user?.id).map((s: any) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000, overflowY: 'auto', padding: '20px' }}>
+          <div style={{ background: 'white', padding: 24, borderRadius: 12, width: 620, maxWidth: '95%', direction: 'rtl', boxShadow: '0 10px 40px rgba(0,0,0,0.3)' }}>
+            <button onClick={() => { setShowAddStudentModal(false); setAddStudentSubjectId(null); setAddStudentId(null); }} style={{ position: 'absolute', left: 16, top: 16, fontSize: 24, border: 'none', background: 'none', cursor: 'pointer', color: '#999' }}>✕</button>
+            <h3 style={{ marginTop: 0, marginBottom: 20, color: '#2e7d32', fontSize: '20px' }}>👨‍🎓 إضافة طالب للمادة</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>📚 اختر المادة (أنت مدرسها)</label>
+                <select value={addStudentSubjectId || ''} onChange={(e) => setAddStudentSubjectId(e.target.value || null)} style={{ padding: '10px 12px', borderRadius: 6, border: '2px solid #e0e0e0', width: '100%', fontSize: '14px', fontFamily: 'inherit' }}>
+                  <option value="">-- اختر المادة --</option>
+                  {subjects.filter(s => s.teacherId === user?.id).map((s: any) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
 
-              <label>اختر الطالب</label>
-              <select value={addStudentId || ''} onChange={(e) => setAddStudentId(e.target.value || null)} style={{ padding: 8, borderRadius: 4, border: '1px solid #ccc' }}>
-                <option value="">-- اختر الطالب --</option>
-                {users.filter(u => u.role === 'user' && String(u.departmentId) === String(user?.departmentId)).map((st: any) => (
-                  <option key={st.id} value={st.id}>{st.name || st.id}</option>
-                ))}
-              </select>
+              {addStudentSubjectId && (
+                <div style={{ backgroundColor: '#f1f8f6', padding: '14px', borderRadius: '8px', border: '2px solid #4caf50' }}>
+                  <h5 style={{ margin: '0 0 10px 0', color: '#2e7d32', fontSize: '14px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>👥 الطلاب المسجلون بالمادة</h5>
+                  {(() => {
+                    const selectedSubject = subjects.find(s => s.id === addStudentSubjectId);
+                    const enrolledStudents = (selectedSubject?.students || []);
+                    if (enrolledStudents.length === 0) {
+                      return <p style={{ margin: 0, color: '#666', fontSize: '13px', fontStyle: 'italic' }}>لا يوجد طلاب مسجلون بعد</p>;
+                    }
+                    return (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                        {enrolledStudents.map((studentId: string) => {
+                          const student = users.find(u => u.id === studentId);
+                          return (
+                            <span key={studentId} style={{ backgroundColor: '#4caf50', color: 'white', padding: '6px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              ✓ {student?.name || studentId}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
 
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
-                <button onClick={() => { setShowAddStudentModal(false); setAddStudentSubjectId(null); setAddStudentId(null); }} style={{ padding: '8px 12px', borderRadius: 4, border: '1px solid #ccc', background: '#fff' }}>إلغاء</button>
-                <button onClick={handleAddStudentToSubject} style={{ padding: '8px 12px', borderRadius: 4, border: 'none', background: '#1976d2', color: '#fff' }}>إضافة</button>
+              <div>
+                <label style={{ fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>👤 اختر الطالب</label>
+                <select value={addStudentId || ''} onChange={(e) => setAddStudentId(e.target.value || null)} style={{ padding: '10px 12px', borderRadius: 6, border: '2px solid #e0e0e0', width: '100%', fontSize: '14px', fontFamily: 'inherit' }}>
+                  <option value="">-- اختر الطالب --</option>
+                  {users.filter(u => u.role === 'user' && String(u.departmentId) === String(user?.departmentId)).map((st: any) => (
+                    <option key={st.id} value={st.id}>{st.name || st.id}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 12 }}>
+                <button onClick={() => { setShowAddStudentModal(false); setAddStudentSubjectId(null); setAddStudentId(null); }} style={{ padding: '10px 20px', borderRadius: 6, border: '1px solid #ccc', background: '#f5f5f5', color: '#333', cursor: 'pointer', fontWeight: '600', fontSize: '14px', transition: 'all 0.2s' }} onMouseEnter={(e) => { e.currentTarget.style.background = '#e0e0e0'; }} onMouseLeave={(e) => { e.currentTarget.style.background = '#f5f5f5'; }}>إلغاء</button>
+                <button onClick={handleAddStudentToSubject} style={{ padding: '10px 20px', borderRadius: 6, border: 'none', background: '#4caf50', color: 'white', cursor: 'pointer', fontWeight: '600', fontSize: '14px', transition: 'all 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.background = '#45a049'} onMouseLeave={(e) => e.currentTarget.style.background = '#4caf50'}>✓ إضافة</button>
               </div>
             </div>
           </div>
@@ -1876,60 +1982,65 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                 ) : (
                   user.role === 'teacher' ? (
                     <>
-                      <h3>إدارة المقرر</h3>
+                      <h3 style={{ color: '#2e7d32', fontSize: '24px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>👨‍🏫 إدارة المقرر</h3>
                       <div className={styles.cardGrid}>
-                        <div className={styles.cardItem}>
+                        {/* إدارة الدروس */}
+                        <div className={styles.cardItem} style={{ border: '2px solid #4caf50', background: 'linear-gradient(135deg, #f1f8f6 0%, #fff 100%)', boxShadow: '0 4px 12px rgba(76, 175, 80, 0.15)' }}>
                           <div className={styles.cardItemContent}>
-                            <img src="../src/svg/video.svg" alt="الدروس" />
-                            <h4>ادارة الدروس</h4>
+                            <span style={{ fontSize: '32px', marginBottom: '8px' }}>🎥</span>
+                            <h4 style={{ color: '#2e7d32', fontWeight: 'bold' }}>إدارة الدروس</h4>
                           </div>
                           <div className={styles.cardItemActions}>
-                            <p onClick={(e) => { e.stopPropagation(); setViewModalType('videos'); }}>عرض الدروس ({videos.filter(v => subjects.find(s=>s.id===v.subjectId && s.teacherId === user.id)).length})</p>
-                            <p onClick={(e) => { e.stopPropagation(); (async () => { if (user?.departmentId) await loadDepartmentData(user.departmentId); setAddModalType('video'); })(); }}>إضافة درس</p>
+                            <p onClick={(e) => { e.stopPropagation(); setViewModalType('videos'); }} style={{ color: '#2e7d32', fontWeight: '500', cursor: 'pointer' }}>📺 عرض الدروس ({videos.filter(v => subjects.find(s=>s.id===v.subjectId && s.teacherId === user.id)).length})</p>
+                            <p onClick={(e) => { e.stopPropagation(); (async () => { if (user?.departmentId) await loadDepartmentData(user.departmentId); setAddModalType('video'); })(); }} style={{ color: '#4caf50', fontWeight: '600', cursor: 'pointer' }}>➕ إضافة درس جديد</p>
                           </div>
                         </div>
 
-                        <div className={styles.cardItem}>
+                        {/* إدارة الواجبات */}
+                        <div className={styles.cardItem} style={{ border: '2px solid #ff9800', background: 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)', boxShadow: '0 4px 12px rgba(255, 152, 0, 0.15)' }}>
                           <div className={styles.cardItemContent}>
-                            <img src="../src/svg/assignment.svg" alt="الواجبات" />
-                            <h4>ادارة الواجبات</h4>
+                            <span style={{ fontSize: '32px', marginBottom: '8px' }}>📝</span>
+                            <h4 style={{ color: '#e65100', fontWeight: 'bold' }}>إدارة الواجبات</h4>
                           </div>
                           <div className={styles.cardItemActions}>
-                            <p onClick={(e) => { e.stopPropagation(); setViewModalType('assignments'); }}>عرض الواجبات ({assignments.filter(a => a.teacherId === user.id || subjects.find(s=>s.id===a.subjectId && s.teacherId===user.id)).length})</p>
-                            <p onClick={(e) => { e.stopPropagation(); setAddModalType('assignment'); }}>إضافة واجب</p>
+                            <p onClick={(e) => { e.stopPropagation(); setViewModalType('assignments'); }} style={{ color: '#e65100', fontWeight: '500', cursor: 'pointer' }}>📋 عرض الواجبات ({assignments.filter(a => a.teacherId === user.id || subjects.find(s=>s.id===a.subjectId && s.teacherId===user.id)).length})</p>
+                            <p onClick={(e) => { e.stopPropagation(); setAddModalType('assignment'); }} style={{ color: '#ff9800', fontWeight: '600', cursor: 'pointer' }}>➕ إضافة واجب جديد</p>
                           </div>
                         </div>
 
-                        <div className={styles.cardItem}>
+                        {/* التنبيهات والرسائل */}
+                        <div className={styles.cardItem} style={{ border: '2px solid #f44336', background: 'linear-gradient(135deg, #ffebee 0%, #fff 100%)', boxShadow: '0 4px 12px rgba(244, 67, 54, 0.15)' }}>
                           <div className={styles.cardItemContent}>
-                            <img src="../src/svg/notification.svg" alt="التنبيهات" />
-                            <h4>التنبيهات</h4>
+                            <span style={{ fontSize: '32px', marginBottom: '8px' }}>🔔</span>
+                            <h4 style={{ color: '#c62828', fontWeight: 'bold' }}>التنبيهات والرسائل</h4>
                           </div>
                           <div className={styles.cardItemActions}>
-                            <p onClick={(e) => { e.stopPropagation(); openNotifModal({ openTab: 'messages' }); }}>الرسائل {unreadMessagesCount > 0 ? `(${unreadMessagesCount})` : ''}</p>
-                            <p onClick={(e) => { e.stopPropagation(); openNotifModal({ openTab: 'notifications', onlyForCurrentUser: true }); }}>التنبيهات {unreadNotificationsCount > 0 ? `(${unreadNotificationsCount})` : ''}</p>
+                            <p onClick={(e) => { e.stopPropagation(); openNotifModal({ openTab: 'messages' }); }} style={{ color: '#c62828', fontWeight: '500', cursor: 'pointer' }}>💬 الرسائل {unreadMessagesCount > 0 ? `(${unreadMessagesCount})` : ''}</p>
+                            <p onClick={(e) => { e.stopPropagation(); openNotifModal({ openTab: 'notifications', onlyForCurrentUser: true }); }} style={{ color: '#f44336', fontWeight: '600', cursor: 'pointer' }}>🔴 التنبيهات {unreadNotificationsCount > 0 ? `(${unreadNotificationsCount})` : ''}</p>
                           </div>
                         </div>
 
-                        <div className={styles.cardItem}>
+                        {/* إضافة طلاب */}
+                        <div className={styles.cardItem} style={{ border: '2px solid #2196f3', background: 'linear-gradient(135deg, #e3f2fd 0%, #fff 100%)', boxShadow: '0 4px 12px rgba(33, 150, 243, 0.15)' }}>
                           <div className={styles.cardItemContent}>
-                            <img src="../src/svg/student.svg" alt="اضافة طلاب" />
-                            <h4>اضافة طلاب للمادة</h4>
+                            <span style={{ fontSize: '32px', marginBottom: '8px' }}>👥</span>
+                            <h4 style={{ color: '#1565c0', fontWeight: 'bold' }}>إدارة الطلاب</h4>
                           </div>
                           <div className={styles.cardItemActions}>
-                            <p onClick={(e) => { e.stopPropagation(); (async () => { if (user?.departmentId) await loadDepartmentData(user.departmentId); setShowAddStudentModal(true); })(); }}>اضافة طالب</p>
-                            <p onClick={(e) => { e.stopPropagation(); setViewModalType('subjects'); }}>عرض المواد التي تدرسها ({subjects.filter(s => s.teacherId === user.id).length})</p>
+                            <p onClick={(e) => { e.stopPropagation(); (async () => { if (user?.departmentId) await loadDepartmentData(user.departmentId); setShowAddStudentModal(true); })(); }} style={{ color: '#1565c0', fontWeight: '500', cursor: 'pointer' }}>➕ إضافة طالب للمادة</p>
+                            <p onClick={(e) => { e.stopPropagation(); setViewModalType('subjects'); }} style={{ color: '#2196f3', fontWeight: '600', cursor: 'pointer' }}>📚 المواد التي تدرسها ({subjects.filter(s => s.teacherId === user.id).length})</p>
                           </div>
                         </div>
 
-                        <div className={styles.cardItem}>
+                        {/* المكتبة */}
+                        <div className={styles.cardItem} style={{ border: '2px solid #3f51b5', background: 'linear-gradient(135deg, #f3e5f5 0%, #fff 100%)', boxShadow: '0 4px 12px rgba(63, 81, 181, 0.15)' }}>
                           <div className={styles.cardItemContent}>
-                            <img src="../src/svg/book.svg" alt="المكتبة" />
-                            <h4>إدارة الكتب</h4>
+                            <span style={{ fontSize: '32px', marginBottom: '8px' }}>📚</span>
+                            <h4 style={{ color: '#283593', fontWeight: 'bold' }}>إدارة المكتبة</h4>
                           </div>
                           <div className={styles.cardItemActions}>
-                            <p onClick={(e) => { e.stopPropagation(); setAddModalType('book'); }}>إضافة رابط الكتاب</p>
-                            <p onClick={(e) => { e.stopPropagation(); setViewModalType('library'); }}>عرض المكتبة ({books.filter(b => b.departmentId === user.departmentId).length})</p>
+                            <p onClick={(e) => { e.stopPropagation(); setAddModalType('book'); }} style={{ color: '#283593', fontWeight: '500', cursor: 'pointer' }}>➕ إضافة رابط كتاب</p>
+                            <p onClick={(e) => { e.stopPropagation(); setViewModalType('library'); }} style={{ color: '#3f51b5', fontWeight: '600', cursor: 'pointer' }}>📖 عرض المكتبة ({books.filter(b => b.departmentId === user.departmentId).length})</p>
                           </div>
                         </div>
                       </div>
@@ -2112,7 +2223,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                               </div>
                               <div style={{ marginTop: 8 }}>
                                 {getVideoId(selectedVideo.video.url) ? (
-                                  <div ref={playerRef} style={{ width: '100%', height: 360 }} />
+                                  <div id="yt-player" style={{ width: '100%', height: 360 }} />
                                 ) : (
                                   <a href={selectedVideo.video.url} target="_blank" rel="noreferrer">افتح الفيديو في نافذة جديدة</a>
                                 )}
@@ -2154,7 +2265,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                                       <p style={{ color: '#666', fontSize: '14px', margin: '0 0 10px 0', lineHeight: '1.4' }}>{video.description}</p>
                                       <p style={{ color: '#333', fontSize: '14px', margin: '0 0 15px 0', fontWeight: '500' }}>📚 المادة: {video.subjectName}</p>
                                     </div>
-                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                                       <button onClick={() => openVideo(video, video.subjectId)} style={{
                                         padding: '10px 15px',
                                         background: '#4caf50',
@@ -2165,6 +2276,22 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                                         fontSize: '14px',
                                         fontWeight: 'bold'
                                       }}>▶ تشغيل الدرس</button>
+                                      {video.lessonFile && (
+                                        <a href={video.lessonFile} download style={{
+                                          padding: '10px 15px',
+                                          background: '#2196f3',
+                                          color: 'white',
+                                          border: 'none',
+                                          borderRadius: '6px',
+                                          cursor: 'pointer',
+                                          fontSize: '14px',
+                                          fontWeight: 'bold',
+                                          textDecoration: 'none',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '5px'
+                                        }}>📎 ملفات الدرس</a>
+                                      )}
                                     </div>
                                   </div>
                                 ))}
@@ -2413,7 +2540,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             )}
 
             {addModalType === 'video' && (
-              <AddVideoForm subjects={subjects} onAdd={(title, url, desc, subjectId) => { handleAddVideo(title, url, desc, subjectId); setAddModalType(null); }} />
+              <AddVideoForm subjects={subjects} onAdd={(title, url, desc, subjectId, file) => { handleAddVideo(title, url, desc, subjectId, file); setAddModalType(null); }} />
             )}
 
             {addModalType === 'assignment' && (
@@ -2425,8 +2552,8 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             )}
 
             {addModalType === 'book' && (
-              <div>
-                <h3>إضافة رابط كتاب</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <h3 style={{ margin: '0 0 8px 0', color: '#283593', fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>📚 إضافة رابط كتاب</h3>
                 <form onSubmit={async (e) => {
                   e.preventDefault();
                   const formData = new FormData(e.target as HTMLFormElement);
@@ -2455,25 +2582,25 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                     }
                   }
                 }}>
-                  <div style={{ marginBottom: '10px' }}>
-                    <label>عنوان الكتاب</label>
-                    <input name="title" type="text" required style={{ width: '100%', padding: '8px', marginTop: '5px' }} />
+                  <div>
+                    <label style={{ fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>📖 عنوان الكتاب</label>
+                    <input name="title" type="text" required placeholder="أدخل اسم الكتاب" style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '2px solid #e0e0e0', fontSize: '14px', fontFamily: 'inherit' }} />
                   </div>
-                  <div style={{ marginBottom: '10px' }}>
-                    <label>الرابط</label>
-                    <input name="url" type="url" required style={{ width: '100%', padding: '8px', marginTop: '5px' }} />
+                  <div style={{ marginTop: 14 }}>
+                    <label style={{ fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>🔗 الرابط</label>
+                    <input name="url" type="url" required placeholder="https://example.com/book" style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '2px solid #e0e0e0', fontSize: '14px', fontFamily: 'inherit' }} />
                   </div>
-                  <div style={{ marginBottom: '10px' }}>
-                    <label>القسم</label>
+                  <div style={{ marginTop: 14 }}>
+                    <label style={{ fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>🏢 القسم</label>
                     {(() => {
                       const deptName = departments.find(d => d.id === user.departmentId)?.name || 'قسمك';
                       return (user?.role === 'teacher' || user?.role === 'department_manager') ? (
                         <>
                           <input name="departmentId" type="hidden" value={user.departmentId} />
-                          <p>{deptName}</p>
+                          <div style={{ padding: '10px 12px', borderRadius: 6, border: '2px solid #3f51b5', backgroundColor: '#f3e5f5', color: '#333', fontSize: '14px', fontWeight: '500' }}>{deptName}</div>
                         </>
                       ) : (
-                        <select name="departmentId" required style={{ width: '100%', padding: '8px', marginTop: '5px' }}>
+                        <select name="departmentId" required style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '2px solid #e0e0e0', fontSize: '14px', fontFamily: 'inherit' }}>
                           {departments.map(dept => (
                             <option key={dept.id} value={dept.id}>{dept.name}</option>
                           ))}
@@ -2481,7 +2608,10 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                       );
                     })()}
                   </div>
-                  <button type="submit" style={{ padding: '10px 20px', background: '#007bff', color: 'white', border: 'none', borderRadius: '5px' }}>إضافة</button>
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
+                    <button type="button" onClick={() => setAddModalType(null)} style={{ padding: '10px 20px', borderRadius: 6, border: '1px solid #ccc', background: '#f5f5f5', color: '#333', cursor: 'pointer', fontWeight: '600', fontSize: '14px', transition: 'all 0.2s' }} onMouseEnter={(e) => { e.currentTarget.style.background = '#e0e0e0'; }} onMouseLeave={(e) => { e.currentTarget.style.background = '#f5f5f5'; }}>إلغاء</button>
+                    <button type="submit" style={{ padding: '10px 20px', borderRadius: 6, border: 'none', background: '#3f51b5', color: 'white', cursor: 'pointer', fontWeight: '600', fontSize: '14px', transition: 'all 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.background = '#303f9f'} onMouseLeave={(e) => e.currentTarget.style.background = '#3f51b5'}>✓ إضافة</button>
+                  </div>
                 </form>
               </div>
             )}
@@ -2760,22 +2890,41 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             {viewModalType === 'subjects' && (
               <div>
                 {filteredSubjects.length === 0 ? (
-                  <p>لا توجد مواد</p>
+                  <div style={{ textAlign: 'center', padding: '40px 20px', color: '#999' }}>
+                    <p style={{ fontSize: '16px' }}>📭 لا توجد مواد</p>
+                  </div>
                 ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
                     {filteredSubjects.map(subject => (
                       <div key={subject.id} style={{
-                        border: '1px solid #000',
-                        padding: '10px',
-                        borderRadius: '8px',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                      }}>
-                        <h5 style={{ margin: '0 0 6px 0' }}>{subject.name}</h5>
-                        <p style={{ color: '#333', fontSize: '13px', margin: '0 0 6px 0', fontWeight: 500 }}>الدكتور: {(() => { const _t = teachers.find(t => String(t.id) === String(subject.teacherId)); return _t ? (_t.name || _t.id) : (subject.teacherId || 'غير محدد'); })()}</p>
-                        <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>{subject.description}</p>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <button onClick={() => handleEditSubjectForManager(subject.id)} style={{ padding: '4px 8px', fontSize: '12px' }}>تعديل</button>
-                          <button onClick={() => handleDeleteSubjectForManager(subject.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
+                        border: '2px solid #9c27b0',
+                        padding: '18px',
+                        borderRadius: '12px',
+                        boxShadow: '0 2px 8px rgba(156, 39, 176, 0.1)',
+                        backgroundColor: '#fff',
+                        transition: 'all 0.3s ease',
+                        position: 'relative',
+                        overflow: 'hidden'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.boxShadow = '0 8px 16px rgba(156, 39, 176, 0.2)';
+                        e.currentTarget.style.transform = 'translateY(-4px)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(156, 39, 176, 0.1)';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                      }}
+                      >
+                        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: 'linear-gradient(90deg, #9c27b0, #ba68c8)' }}></div>
+                        <h5 style={{ margin: '12px 0 8px 0', color: '#6a1b9a', fontSize: '16px', fontWeight: 'bold' }}>📚 {subject.name}</h5>
+                        <p style={{ color: '#666', fontSize: '13px', margin: '0 0 10px 0', lineHeight: '1.5' }}>{subject.description}</p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: '10px 0', fontSize: '13px', color: '#6a1b9a', fontWeight: '500' }}>
+                          <span>👨‍🏫</span>
+                          <span>الدكتور: {(() => { const _t = teachers.find(t => String(t.id) === String(subject.teacherId)); return _t ? (_t.name || _t.id) : (subject.teacherId || 'غير محدد'); })()}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          <button onClick={() => handleEditSubjectForManager(subject.id)} style={{ padding: '8px 14px', fontSize: '13px', fontWeight: '600', background: '#2196f3', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.2s', flex: 1 }} onMouseEnter={(e) => e.currentTarget.style.background = '#0b7dda'} onMouseLeave={(e) => e.currentTarget.style.background = '#2196f3'}>✏️ تعديل</button>
+                          <button onClick={() => handleDeleteSubjectForManager(subject.id)} style={{ padding: '8px 14px', fontSize: '13px', fontWeight: '600', background: '#f44336', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.2s', flex: 1 }} onMouseEnter={(e) => e.currentTarget.style.background = '#e53935'} onMouseLeave={(e) => e.currentTarget.style.background = '#f44336'}>🗑️ حذف</button>
                         </div>
                       </div>
                     ))}
@@ -2786,41 +2935,66 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             {viewModalType === 'videos' && (
               <div>
                 {selectedVideo && (
-                  <div style={{ marginBottom: 12, border: '1px solid #e0e0e0', padding: 12, borderRadius: 8 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                      <h3 style={{ margin: 0 }}>{selectedVideo.video.title}</h3>
+                  <div style={{ marginBottom: 20, border: '2px solid #4caf50', padding: 16, borderRadius: 12, backgroundColor: '#f1f8f6', boxShadow: '0 4px 12px rgba(76, 175, 80, 0.2)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                      <h3 style={{ margin: 0, color: '#2e7d32', fontSize: '20px' }}>🎬 {selectedVideo.video.title}</h3>
                       <div>
-                        <button onClick={() => setSelectedVideo(null)} style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #ccc', background: '#fff' }}>إغلاق</button>
+                        <button onClick={() => setSelectedVideo(null)} style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #ccc', background: '#fff', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}>إغلاق</button>
                       </div>
                     </div>
-                    <div style={{ marginTop: 8 }}>
+                    <div style={{ marginTop: 12 }}>
                       {getYoutubeEmbedUrl(selectedVideo.video.url) ? (
-                        <iframe src={getYoutubeEmbedUrl(selectedVideo.video.url) || ''} width="100%" height={360} frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                        <iframe src={getYoutubeEmbedUrl(selectedVideo.video.url) || ''} width="100%" height={400} frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen style={{ borderRadius: 8 }} />
                       ) : (
-                        <a href={selectedVideo.video.url} target="_blank" rel="noreferrer">افتح الفيديو في نافذة جديدة</a>
+                        <a href={selectedVideo.video.url} target="_blank" rel="noreferrer" style={{ color: '#4caf50', fontSize: '16px', fontWeight: 'bold' }}>📺 افتح الفيديو في نافذة جديدة</a>
                       )}
                     </div>
-                    <p style={{ marginTop: 8 }}>{selectedVideo.video.description}</p>
+                    <p style={{ marginTop: 12, color: '#555', fontSize: '15px', lineHeight: '1.6' }}>{selectedVideo.video.description}</p>
                   </div>
                 )}
                 {filteredVideos.length === 0 ? (
-                  <p>لا توجد دروس</p>
+                  <div style={{ textAlign: 'center', padding: '40px 20px', color: '#999' }}>
+                    <p style={{ fontSize: '16px' }}>📭 لا توجد دروس</p>
+                  </div>
                 ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
                     {filteredVideos.map(video => (
                       <div key={video.id} style={{
-                        border: '1px solid #000',
-                        padding: '10px',
-                        borderRadius: '8px',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                      }}>
-                        <h5 style={{ margin: '0 0 8px 0' }}>{video.title}</h5>
-                        <p style={{ color: '#666', fontSize: '12px', margin: '0 0 4px 0' }}>{video.description}</p>
-                        <p style={{ color: '#000', fontSize: '11px', margin: '0 0 8px 0' }}>المادة: {video.subjectName}</p>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <button onClick={() => openVideo(video, video.subjectId)} style={{ padding: '4px 8px', fontSize: '12px' }}>▶ تشغيل</button>
-                          <button onClick={() => handleEditVideo(video.id)} style={{ padding: '4px 8px', fontSize: '12px' }}>تعديل</button>
-                          <button onClick={() => handleDeleteVideo(video.id, video.subjectId)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
+                        border: '2px solid #e0e0e0',
+                        padding: '18px',
+                        borderRadius: '12px',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                        backgroundColor: '#fff',
+                        transition: 'all 0.3s ease',
+                        cursor: 'pointer',
+                        position: 'relative',
+                        overflow: 'hidden'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.boxShadow = '0 8px 16px rgba(76, 175, 80, 0.15)';
+                        e.currentTarget.style.transform = 'translateY(-4px)';
+                        e.currentTarget.style.borderColor = '#4caf50';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.borderColor = '#e0e0e0';
+                      }}
+                      >
+                        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: 'linear-gradient(90deg, #4caf50, #81c784)' }}></div>
+                        <h5 style={{ margin: '12px 0 8px 0', color: '#2e7d32', fontSize: '16px', fontWeight: 'bold' }}>🎥 {video.title}</h5>
+                        <p style={{ color: '#666', fontSize: '13px', margin: '0 0 8px 0', lineHeight: '1.5' }}>{video.description}</p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: '10px 0', fontSize: '12px', color: '#4caf50', fontWeight: '500' }}>
+                          <span>📚</span>
+                          <span>{video.subjectName}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          <button onClick={() => openVideo(video, video.subjectId)} style={{ padding: '8px 14px', fontSize: '13px', fontWeight: '600', background: '#4caf50', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.background = '#45a049'} onMouseLeave={(e) => e.currentTarget.style.background = '#4caf50'}>▶ تشغيل</button>
+                          {video.lessonFile && (
+                            <a href={video.lessonFile} download style={{ padding: '8px 14px', fontSize: '13px', fontWeight: '600', background: '#2196f3', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.2s', textDecoration: 'none', display: 'flex', alignItems: 'center' }} onMouseEnter={(e) => e.currentTarget.style.background = '#0b7dda'} onMouseLeave={(e) => e.currentTarget.style.background = '#2196f3'}>📎 ملفات درس</a>
+                          )}
+                          <button onClick={() => handleEditVideo(video.id)} style={{ padding: '8px 14px', fontSize: '13px', fontWeight: '600', background: '#ff9800', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.background = '#f57c00'} onMouseLeave={(e) => e.currentTarget.style.background = '#ff9800'}>✏️ تعديل</button>
+                          <button onClick={() => handleDeleteVideo(video.id, video.subjectId)} style={{ padding: '8px 14px', fontSize: '13px', fontWeight: '600', background: '#f44336', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.background = '#e53935'} onMouseLeave={(e) => e.currentTarget.style.background = '#f44336'}>🗑️ حذف</button>
                         </div>
                       </div>
                     ))}
@@ -2911,15 +3085,15 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             )}
             {viewModalType === 'assignments' && (
               <div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button onClick={() => setAssignmentSortType('none')} style={{ padding: '6px 12px', fontSize: '13px', background: assignmentSortType === 'none' ? '#1976d2' : '#f0f0f0', color: assignmentSortType === 'none' ? 'white' : 'black', border: 'none', borderRadius: 4, cursor: 'pointer' }}>بدون فرز</button>
-                    <button onClick={() => setAssignmentSortType('name')} style={{ padding: '6px 12px', fontSize: '13px', background: assignmentSortType === 'name' ? '#1976d2' : '#f0f0f0', color: assignmentSortType === 'name' ? 'white' : 'black', border: 'none', borderRadius: 4, cursor: 'pointer' }}>الاسم</button>
-                    <button onClick={() => setAssignmentSortType('date')} style={{ padding: '6px 12px', fontSize: '13px', background: assignmentSortType === 'date' ? '#1976d2' : '#f0f0f0', color: assignmentSortType === 'date' ? 'white' : 'black', border: 'none', borderRadius: 4, cursor: 'pointer' }}>التاريخ</button>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button onClick={() => setAssignmentSortType('none')} style={{ padding: '8px 16px', fontSize: '13px', fontWeight: '600', background: assignmentSortType === 'none' ? '#ff9800' : '#f0f0f0', color: assignmentSortType === 'none' ? 'white' : '#333', border: 'none', borderRadius: 6, cursor: 'pointer', transition: 'all 0.2s' }}>📌 بدون فرز</button>
+                    <button onClick={() => setAssignmentSortType('name')} style={{ padding: '8px 16px', fontSize: '13px', fontWeight: '600', background: assignmentSortType === 'name' ? '#ff9800' : '#f0f0f0', color: assignmentSortType === 'name' ? 'white' : '#333', border: 'none', borderRadius: 6, cursor: 'pointer', transition: 'all 0.2s' }}>📝 الاسم</button>
+                    <button onClick={() => setAssignmentSortType('date')} style={{ padding: '8px 16px', fontSize: '13px', fontWeight: '600', background: assignmentSortType === 'date' ? '#ff9800' : '#f0f0f0', color: assignmentSortType === 'date' ? 'white' : '#333', border: 'none', borderRadius: 6, cursor: 'pointer', transition: 'all 0.2s' }}>📅 التاريخ</button>
                   </div>
                 </div>
                 {assignments && assignments.length > 0 ? (
-                  <div style={{ display: 'grid', gap: 10 }}>
+                  <div style={{ display: 'grid', gap: 16 }}>
                     {(() => {
                       let sorted = [...(assignments || [])];
                       if (assignmentSortType === 'name') {
@@ -2932,39 +3106,40 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                         });
                       }
                       return sorted.map(a => (
-                      <div key={a.id} style={{ border: '1px solid #000', padding: 10, borderRadius: 8 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                          <strong style={{ fontSize: '14px' }}>{a.title}</strong>
-                          <div style={{ fontSize: 12, color: '#666' }}>{a.subjectId ? `المادة: ${subjects.find(s => String(s.id) === String(a.subjectId))?.name || a.subjectId}` : ''}</div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ fontSize: 11, color: '#666' }}>{a.dueDate ? `المهلة: ${new Date(a.dueDate).toLocaleDateString()}` : ''}</span>
-                            <button onClick={() => handleDeleteAssignment(a.id)} style={{ padding: '2px 6px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px', fontSize: '11px' }}>حذف</button>
+                      <div key={a.id} style={{ border: '2px solid #ff9800', padding: 16, borderRadius: 12, backgroundColor: '#fff', boxShadow: '0 2px 8px rgba(255, 152, 0, 0.1)', transition: 'all 0.3s ease', position: 'relative', overflow: 'hidden' }} onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 8px 16px rgba(255, 152, 0, 0.15)'; e.currentTarget.style.transform = 'translateY(-2px)'; }} onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(255, 152, 0, 0.1)'; e.currentTarget.style.transform = 'translateY(0)'; }}>
+                        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: 'linear-gradient(90deg, #ff9800, #ffb74d)' }}></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                          <div>
+                            <h5 style={{ fontSize: '16px', fontWeight: 'bold', color: '#e65100', margin: '12px 0 8px 0' }}>📋 {a.title}</h5>
+                            {a.subjectId && <div style={{ fontSize: '13px', color: '#666', marginBottom: '6px', fontWeight: '500' }}>📚 {subjects.find(s => String(s.id) === String(a.subjectId))?.name || a.subjectId}</div>}
+                            {a.dueDate && <div style={{ fontSize: '12px', color: '#ff9800', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>⏰ المهلة: {new Date(a.dueDate).toLocaleDateString('ar-SA')}</div>}
                           </div>
+                          <button onClick={() => handleDeleteAssignment(a.id)} style={{ padding: '6px 12px', background: '#f44336', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.background = '#e53935'} onMouseLeave={(e) => e.currentTarget.style.background = '#f44336'}>🗑️ حذف</button>
                         </div>
-                        <p style={{ margin: 0, fontSize: '13px' }}>{a.question}</p>
+                        <p style={{ margin: 0, fontSize: '14px', color: '#333', lineHeight: '1.6', padding: '12px', backgroundColor: '#f9f9f9', borderRadius: '8px', borderRight: '4px solid #ff9800' }}>{a.question}</p>
                         {(user.role === 'department_manager' || user.role === 'teacher') && (
-                          <div style={{ marginTop: 8, backgroundColor: '#f5f5f5', padding: '12px', borderRadius: '6px' }}>
-                            <h6 style={{ margin: '0 0 12px 0', fontSize: '13px', fontWeight: 'bold', color: '#333' }}>📋 التسليمات ({(a.completions || []).length})</h6>
+                          <div style={{ marginTop: 16, backgroundColor: '#fff3e0', padding: '14px', borderRadius: '10px', border: '2px solid #ffe0b2' }}>
+                            <h6 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 'bold', color: '#e65100', display: 'flex', alignItems: 'center', gap: '6px' }}>📊 التسليمات ({(a.completions || []).length})</h6>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                               {(a.completions || []).map((c: any, idx: number) => (
-                                <div key={idx} style={{ border: '1px solid #ddd', padding: '12px', borderRadius: '6px', background: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                    <strong style={{ fontSize: '12px', color: '#1976d2' }}>👤 {c.userName || c.userId}</strong>
-                                    <span style={{ fontSize: '11px', color: '#999' }}>📅 {c.date ? new Date(c.date).toLocaleString('ar-SA') : ''}</span>
+                                <div key={idx} style={{ border: '1px solid #ffe0b2', padding: '12px', borderRadius: '8px', background: '#ffffff', boxShadow: '0 1px 4px rgba(255, 152, 0, 0.1)', borderRight: '4px solid #ff9800' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                    <strong style={{ fontSize: '13px', color: '#e65100', display: 'flex', alignItems: 'center', gap: '6px' }}>👤 {c.userName || c.userId}</strong>
+                                    <span style={{ fontSize: '12px', color: '#999' }}>📅 {c.date ? new Date(c.date).toLocaleString('ar-SA') : ''}</span>
                                   </div>
-                                  <div style={{ marginBottom: '10px', padding: '8px', background: '#f9f9f9', borderRadius: '4px', border: '1px solid #e0e0e0', fontSize: '12px', lineHeight: '1.5', color: '#333' }}>
-                                    <strong>الإجابة:</strong> {formatAnswer(c.answer, a.answerType)}
+                                  <div style={{ marginBottom: '10px', padding: '10px', background: '#fafafa', borderRadius: '6px', border: '1px solid #f0f0f0', fontSize: '13px', lineHeight: '1.6', color: '#333' }}>
+                                    <strong style={{ color: '#e65100' }}>✍️ الإجابة:</strong> {formatAnswer(c.answer, a.answerType)}
                                   </div>
                                   {c.fileUrl && (
-                                    <div style={{ padding: '8px', backgroundColor: '#e3f2fd', borderRadius: '4px', border: '1px solid #90caf9' }}>
-                                      <a href={c.fileUrl} download target="_blank" rel="noopener noreferrer" style={{ color: '#1976d2', textDecoration: 'none', fontWeight: 'bold', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <div style={{ padding: '10px', backgroundColor: '#e8f5e9', borderRadius: '6px', border: '1px solid #c8e6c9' }}>
+                                      <a href={c.fileUrl} download target="_blank" rel="noopener noreferrer" style={{ color: '#2e7d32', textDecoration: 'none', fontWeight: '600', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                         📥 تحميل الملف
                                       </a>
                                     </div>
                                   )}
                                 </div>
                               ))}
-                              {(!a.completions || a.completions.length === 0) && <p style={{ color: '#999', fontSize: '11px', margin: 0, fontStyle: 'italic' }}>لا توجد تسليمات بعد</p>}
+                              {(!a.completions || a.completions.length === 0) && <p style={{ color: '#999', fontSize: '12px', margin: 0, fontStyle: 'italic' }}>لا توجد تسليمات بعد</p>}
                             </div>
                           </div>
                         )}
@@ -2973,7 +3148,9 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                     })()}
                   </div>
                 ) : (
-                  <p>لا توجد واجبات</p>
+                  <div style={{ textAlign: 'center', padding: '40px 20px', color: '#999' }}>
+                    <p style={{ fontSize: '16px' }}>📭 لا توجد واجبات</p>
+                  </div>
                 )}
               </div>
             )}
@@ -3072,14 +3249,14 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             )}
             {viewModalType === 'library' && (
               <div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
                   <input
                     type="text"
-                    placeholder="ابحث في المكتبة..."
+                    placeholder="🔍 ابحث في المكتبة..."
                     value={modalLibrarySearchTerm}
                     onChange={(e) => setModalLibrarySearchTerm(e.target.value)}
                     className={styles.searchInput}
-                    style={{ width: '100%' }}
+                    style={{ width: '100%', padding: '10px 14px', fontSize: '14px', borderRadius: '8px', border: '2px solid #e0e0e0' }}
                   />
                 </div>
 
@@ -3099,7 +3276,9 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                     return title.includes(q) || deptName.includes(q);
                   });
 
-                  if (list.length === 0) return <p>لا توجد كتب</p>;
+                  if (list.length === 0) return <div style={{ textAlign: 'center', padding: '40px 20px', color: '#999' }}>
+                    <p style={{ fontSize: '16px' }}>📚 لا توجد كتب</p>
+                  </div>;
 
                   return (
                     <div
@@ -3112,7 +3291,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                         e.preventDefault();
                       }}
                     >
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
                         {list.map(book => {
                           const dept = departments.find(d => d.id === book.departmentId);
                           const uploaderName = book.uploaderName || (() => {
@@ -3121,19 +3300,48 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                           })();
                           return (
                             <div key={book.id} style={{
-                              border: '1px solid #000',
-                              padding: '10px',
-                              borderRadius: '8px',
-                              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                            }}>
-                              <h5 style={{ margin: '0 0 8px 0' }}>{book.title}</h5>
-                              <p style={{ color: '#666', fontSize: '14px', margin: '0 0 5px 0' }}>القسم: {dept ? dept.name : 'غير محدد'}</p>
-                              <p style={{ color: '#666', fontSize: '14px', margin: '0 0 5px 0' }}>تم الرفع بواسطة: {uploaderName}</p>
-                              <p style={{ color: '#666', fontSize: '14px', margin: '0 0 5px 0' }}>تاريخ الإضافة: {new Date(book.createdAt).toLocaleDateString('en-US')}</p>
-                              <div style={{ display: 'flex', gap: '8px' }}>
-                                <button onClick={() => window.open(book.url, '_blank')} style={{ padding: '4px 8px', fontSize: '12px', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px' }}>فتح الرابط</button>
+                              border: '2px solid #3f51b5',
+                              padding: '18px',
+                              borderRadius: '12px',
+                              backgroundColor: '#fff',
+                              boxShadow: '0 2px 8px rgba(63, 81, 181, 0.1)',
+                              transition: 'all 0.3s ease',
+                              position: 'relative',
+                              overflow: 'hidden',
+                              display: 'flex',
+                              flexDirection: 'column'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.boxShadow = '0 8px 16px rgba(63, 81, 181, 0.2)';
+                              e.currentTarget.style.transform = 'translateY(-4px)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.boxShadow = '0 2px 8px rgba(63, 81, 181, 0.1)';
+                              e.currentTarget.style.transform = 'translateY(0)';
+                            }}
+                            >
+                              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: 'linear-gradient(90deg, #3f51b5, #5c6bc0)' }}></div>
+                              <h5 style={{ margin: '12px 0 12px 0', color: '#283593', fontSize: '16px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>📖 {book.title}</h5>
+                              
+                              <div style={{ flex: 1, marginBottom: '12px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: '8px 0', fontSize: '13px', color: '#555' }}>
+                                  <span>🏢</span>
+                                  <span><strong>القسم:</strong> {dept ? dept.name : 'غير محدد'}</span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: '8px 0', fontSize: '13px', color: '#555' }}>
+                                  <span>👤</span>
+                                  <span><strong>الناشر:</strong> {uploaderName}</span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: '8px 0', fontSize: '13px', color: '#555' }}>
+                                  <span>📅</span>
+                                  <span><strong>التاريخ:</strong> {new Date(book.createdAt).toLocaleDateString('ar-SA')}</span>
+                                </div>
+                              </div>
+                              
+                              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                <button onClick={() => window.open(book.url, '_blank')} style={{ padding: '8px 14px', fontSize: '13px', fontWeight: '600', background: '#3f51b5', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.2s', flex: 1 }} onMouseEnter={(e) => e.currentTarget.style.background = '#303f9f'} onMouseLeave={(e) => e.currentTarget.style.background = '#3f51b5'}>🔗 الرابط</button>
                                 {(user?.role === 'admin' || user?.role === 'department_manager' || (user?.role === 'teacher' && book.departmentId === user.departmentId)) && (
-                                  <button onClick={() => handleDeleteBook(book.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
+                                  <button onClick={() => handleDeleteBook(book.id)} style={{ padding: '8px 14px', fontSize: '13px', fontWeight: '600', background: '#f44336', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.2s', flex: 1 }} onMouseEnter={(e) => e.currentTarget.style.background = '#e53935'} onMouseLeave={(e) => e.currentTarget.style.background = '#f44336'}>🗑️ حذف</button>
                                 )}
                               </div>
                             </div>
@@ -3445,39 +3653,70 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
 
 
-function AddVideoForm({ subjects, onAdd }: { subjects: any[]; onAdd: (title: string, url: string, description: string, subjectId: string) => void }) {
+function AddVideoForm({ subjects, onAdd }: { subjects: any[]; onAdd: (title: string, url: string, description: string, subjectId: string, file?: File) => void }) {
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
   const [desc, setDesc] = useState('');
   const [subjectId, setSubjectId] = useState('');
+  const [file, setFile] = useState<File | null>(null);
 
-  const inputStyle: React.CSSProperties = { width: '100%', padding: '10px', borderRadius: 6, border: '1px solid #ccc', fontSize: 14 };
-  const btnStyle: React.CSSProperties = { padding: '10px 14px', background: '#1565c0', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer' };
+  const inputStyle: React.CSSProperties = { width: '100%', padding: '10px 12px', borderRadius: 6, border: '2px solid #e0e0e0', fontSize: 14, fontFamily: 'inherit' };
+  const btnStyle: React.CSSProperties = { padding: '10px 20px', background: '#4caf50', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: '600', transition: 'all 0.2s' };
 
   return (
     <form
-      onSubmit={(e) => { e.preventDefault(); if (title && url && subjectId) { onAdd(title, url, desc, subjectId); setTitle(''); setUrl(''); setDesc(''); setSubjectId(''); } }}
-      style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: '560px' }}
+      onSubmit={(e) => { e.preventDefault(); if (title && url && subjectId) { onAdd(title, url, desc, subjectId, file || undefined); setTitle(''); setUrl(''); setDesc(''); setSubjectId(''); setFile(null); } }}
+      style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
       aria-label="نموذج إضافة فيديو"
     >
-      <label style={{ fontSize: 14, marginBottom: 4 }}>المادة</label>
-      <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)} required style={{ ...inputStyle, appearance: 'none' }}>
-        <option value="">-- اختر مادة --</option>
-        {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-      </select>
+      <h3 style={{ margin: '0 0 8px 0', color: '#2e7d32', fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>🎥 إضافة درس جديد</h3>
+      
+      <div>
+        <label style={{ fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>📚 المادة</label>
+        <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)} required style={inputStyle}>
+          <option value="">-- اختر مادة --</option>
+          {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+      </div>
 
-      <label style={{ fontSize: 14, marginTop: 6, marginBottom: 4 }}>عنوان الفيديو</label>
-      <input placeholder="عنوان واضح للفيديو" value={title} onChange={(e) => setTitle(e.target.value)} required style={inputStyle} />
+      <div>
+        <label style={{ fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>🎬 عنوان الفيديو</label>
+        <input placeholder="عنوان واضح للفيديو" value={title} onChange={(e) => setTitle(e.target.value)} required style={inputStyle} />
+      </div>
 
-      <label style={{ fontSize: 14, marginTop: 6, marginBottom: 4 }}>رابط الفيديو</label>
-      <input placeholder="رابط يوتيوب أو رابط مباشر" value={url} onChange={(e) => setUrl(e.target.value)} required style={inputStyle} />
+      <div>
+        <label style={{ fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>🔗 رابط الفيديو</label>
+        <input placeholder="رابط يوتيوب أو رابط مباشر" value={url} onChange={(e) => setUrl(e.target.value)} required style={inputStyle} />
+      </div>
 
-      <label style={{ fontSize: 14, marginTop: 6, marginBottom: 4 }}>وصف (اختياري)</label>
-      <textarea placeholder="ملخص قصير عن محتوى الفيديو" value={desc} onChange={(e) => setDesc(e.target.value)} rows={3} style={{ ...inputStyle, resize: 'vertical' }} />
+      <div>
+        <label style={{ fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>📝 وصف (اختياري)</label>
+        <textarea placeholder="ملخص قصير عن محتوى الفيديو" value={desc} onChange={(e) => setDesc(e.target.value)} rows={3} style={{ ...inputStyle, resize: 'vertical' }} />
+      </div>
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-        <button type="submit" style={btnStyle}>أضف الفيديو</button>
-        <button type="button" onClick={() => { setTitle(''); setUrl(''); setDesc(''); setSubjectId(''); }} style={{ padding: '10px 14px', borderRadius: 6, border: '1px solid #ccc', background: 'white', cursor: 'pointer' }}>مسح</button>
+      <div>
+        <label style={{ fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>📎 رفع ملف درس (اختياري)</label>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input 
+            type="file" 
+            onChange={(e) => setFile(e.target.files?.[0] || null)} 
+            style={{ flex: 1, padding: '10px 12px', borderRadius: 6, border: '2px solid #e0e0e0', fontSize: 14, fontFamily: 'inherit' }}
+            accept="*"
+          />
+          {file && <button 
+            type="button" 
+            onClick={() => setFile(null)} 
+            style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #f44336', background: '#ffebee', color: '#f44336', cursor: 'pointer', fontSize: 12, fontWeight: '600' }}
+          >
+            ✕ حذف
+          </button>}
+        </div>
+        {file && <p style={{ fontSize: 12, color: '#4caf50', marginTop: '8px', fontWeight: '500' }}>✓ الملف المختار: {file.name}</p>}
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
+        <button type="button" onClick={() => { setTitle(''); setUrl(''); setDesc(''); setSubjectId(''); setFile(null); }} style={{ padding: '10px 20px', borderRadius: 6, border: '1px solid #ccc', background: '#f5f5f5', color: '#333', cursor: 'pointer', fontWeight: '600', fontSize: '14px' }} onMouseEnter={(e) => { e.currentTarget.style.background = '#e0e0e0'; }} onMouseLeave={(e) => { e.currentTarget.style.background = '#f5f5f5'; }}>مسح</button>
+        <button type="submit" style={btnStyle} onMouseEnter={(e) => e.currentTarget.style.background = '#45a049'} onMouseLeave={(e) => e.currentTarget.style.background = '#4caf50'}>✓ أضف الدرس</button>
       </div>
     </form>
   );
@@ -3493,69 +3732,96 @@ function AddAssignmentForm({ subjects, onAdd }: { subjects?: any[]; onAdd: (titl
   const [subjectId, setSubjectId] = useState('');
   const [fileRequirement, setFileRequirement] = useState('none');
 
-  const inputStyle: React.CSSProperties = { width: '100%', padding: '10px', borderRadius: 6, border: '1px solid #ccc', fontSize: 14 };
-  const btnStyle: React.CSSProperties = { padding: '10px 14px', background: '#000', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer' };
+  const inputStyle: React.CSSProperties = { width: '100%', padding: '10px 12px', borderRadius: 6, border: '2px solid #e0e0e0', fontSize: 14, fontFamily: 'inherit' };
+  const btnStyle: React.CSSProperties = { padding: '10px 20px', background: '#ff9800', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: '600', transition: 'all 0.2s' };
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); const opts = optionsText ? optionsText.split('|').map(s => s.trim()).filter(Boolean) : undefined; const finalAnswerType = fileRequirement === 'required' ? 'essay' : answerType; onAdd(title, question, finalAnswerType, opts, correctAnswer || undefined, due || undefined, subjectId || undefined, fileRequirement); setTitle(''); setQuestion(''); setAnswerType('choice'); setOptionsText(''); setCorrectAnswer(''); setDue(''); setSubjectId(''); setFileRequirement('none'); }} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <label>اسم الدرس / عنوان الواجب</label>
-      <input value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="مثال: واجب الأسبوع 1" style={inputStyle} />
+    <form onSubmit={(e) => { e.preventDefault(); const opts = optionsText ? optionsText.split('|').map(s => s.trim()).filter(Boolean) : undefined; const finalAnswerType = fileRequirement === 'required' ? 'essay' : answerType; onAdd(title, question, finalAnswerType, opts, correctAnswer || undefined, due || undefined, subjectId || undefined, fileRequirement); setTitle(''); setQuestion(''); setAnswerType('choice'); setOptionsText(''); setCorrectAnswer(''); setDue(''); setSubjectId(''); setFileRequirement('none'); }} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <h3 style={{ margin: '0 0 12px 0', color: '#e65100', fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>📝 إضافة واجب جديد</h3>
+      
+      {/* العنوان والمادة - صفين */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div>
+          <label style={{ fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>📋 عنوان الواجب</label>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="مثال: واجب الأسبوع 1" style={inputStyle} />
+        </div>
 
-      <label>السؤال</label>
-      <textarea value={question} onChange={(e) => setQuestion(e.target.value)} rows={3} required placeholder="نص السؤال" style={{ ...inputStyle, resize: 'vertical' }} />
-
-      {fileRequirement !== 'required' && (
-        <>
-          <label>نوع الإجابة</label>
-          <select value={answerType} onChange={(e) => setAnswerType(e.target.value)} required style={inputStyle}>
-            <option value="choice">اختيار من متعدد</option>
-            <option value="tf">صح / خطأ</option>
-            <option value="essay">مقالي</option>
+        <div>
+          <label style={{ fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>📚 المادة</label>
+          <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)} required style={inputStyle}>
+            <option value="" disabled>اختر المادة</option>
+            {(subjects || []).map(s => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
           </select>
-        </>
-      )}
+        </div>
+      </div>
 
-      <label>متطلبات الملف</label>
-      <select value={fileRequirement} onChange={(e) => setFileRequirement(e.target.value)} style={inputStyle}>
-        <option value="none">لا يوجد ملف</option>
-        <option value="optional">ملف اختياري</option>
-        <option value="required">ملف مطلوب</option>
-      </select>
+      {/* السؤال - بعرض كامل */}
+      <div>
+        <label style={{ fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>❓ السؤال</label>
+        <textarea value={question} onChange={(e) => setQuestion(e.target.value)} rows={3} required placeholder="نص السؤال" style={{ ...inputStyle, resize: 'vertical' }} />
+      </div>
 
+      {/* نوع الإجابة والملف - صفين */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        {fileRequirement !== 'required' && (
+          <div>
+            <label style={{ fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>✍️ نوع الإجابة</label>
+            <select value={answerType} onChange={(e) => setAnswerType(e.target.value)} required style={inputStyle}>
+              <option value="choice">اختيار من متعدد</option>
+              <option value="tf">صح / خطأ</option>
+              <option value="essay">مقالي</option>
+            </select>
+          </div>
+        )}
 
+        <div>
+          <label style={{ fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>📎 متطلبات الملف</label>
+          <select value={fileRequirement} onChange={(e) => setFileRequirement(e.target.value)} style={inputStyle}>
+            <option value="none">لا يوجد ملف</option>
+            <option value="optional">ملف اختياري</option>
+            <option value="required">ملف مطلوب</option>
+          </select>
+        </div>
+      </div>
+
+      {/* الخيارات والإجابة الصحيحة */}
       {answerType === 'choice' && (
-        <>
-          <label>الخيارات (افصل بين الخيارات بـ <span style={{ fontWeight: 600 }}>|</span>)</label>
-          <input value={optionsText} onChange={(e) => setOptionsText(e.target.value)} required placeholder="خيار1 | خيار2 | خيار3" style={inputStyle} />
-          <label>الإجابة الصحيحة (نص الخيار الصحيح)</label>
-          <input value={correctAnswer} onChange={(e) => setCorrectAnswer(e.target.value)} required placeholder="ضع النص الصحيح من الخيارات" style={inputStyle} />
-        </>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div>
+            <label style={{ fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>🔤 الخيارات (افصل بـ | )</label>
+            <input value={optionsText} onChange={(e) => setOptionsText(e.target.value)} required placeholder="خيار1 | خيار2 | خيار3" style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>✓ الإجابة الصحيحة</label>
+            <input value={correctAnswer} onChange={(e) => setCorrectAnswer(e.target.value)} required placeholder="ضع النص الصحيح من الخيارات" style={inputStyle} />
+          </div>
+        </div>
       )}
 
       {answerType === 'tf' && (
-        <>
-          <label>الإجابة الصحيحة</label>
+        <div>
+          <label style={{ fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>✓ الإجابة الصحيحة</label>
           <select value={correctAnswer} onChange={(e) => setCorrectAnswer(e.target.value)} required style={inputStyle}>
-            <option value="true">صح</option>
-            <option value="false">خطأ</option>
+            <option value="true">✓ صح</option>
+            <option value="false">✕ خطأ</option>
           </select>
-        </>
+        </div>
       )}
 
-      <label>تاريخ التسليم (اختياري)</label>
-      <input type="date" value={due} onChange={(e) => setDue(e.target.value)} style={inputStyle} />
+      {/* تاريخ التسليم - بنصف العرض */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div>
+          <label style={{ fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>📅 تاريخ التسليم (اختياري)</label>
+          <input type="date" value={due} onChange={(e) => setDue(e.target.value)} style={inputStyle} />
+        </div>
+      </div>
 
-      <label>المادة</label>
-      <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)} required style={{ padding: '8px', border: '1px solid #ccc', borderRadius: 4 }}>
-        <option value="" disabled>اختر المادة</option>
-        {(subjects || []).map(s => (
-          <option key={s.id} value={s.id}>{s.name}</option>
-        ))}
-      </select>
-
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button type="submit" style={btnStyle}>أضف الواجب</button>
-        <button type="button" onClick={() => { setTitle(''); setQuestion(''); setAnswerType('choice'); setOptionsText(''); setCorrectAnswer(''); setDue(''); setSubjectId(''); setFileRequirement('none'); }} style={{ padding: '10px 14px', borderRadius: 6, border: '1px solid #ccc', background: 'white', cursor: 'pointer' }}>مسح</button>
+      {/* الأزرار */}
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
+        <button type="button" onClick={() => { setTitle(''); setQuestion(''); setAnswerType('choice'); setOptionsText(''); setCorrectAnswer(''); setDue(''); setSubjectId(''); setFileRequirement('none'); }} style={{ padding: '10px 20px', borderRadius: 6, border: '1px solid #ccc', background: '#f5f5f5', color: '#333', cursor: 'pointer', fontWeight: '600', fontSize: '14px' }} onMouseEnter={(e) => { e.currentTarget.style.background = '#e0e0e0'; }} onMouseLeave={(e) => { e.currentTarget.style.background = '#f5f5f5'; }}>مسح</button>
+        <button type="submit" style={btnStyle} onMouseEnter={(e) => e.currentTarget.style.background = '#f57c00'} onMouseLeave={(e) => e.currentTarget.style.background = '#ff9800'}>✓ أضف الواجب</button>
       </div>
     </form>
   );
