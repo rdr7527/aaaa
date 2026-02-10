@@ -29,6 +29,7 @@ export async function POST(req: Request) {
     url: body.url,
     description: body.description || '',
     lessonFile: body.lessonFile || null,
+    createdAt: new Date().toISOString(),
   };
   if (!subject.videos) subject.videos = [];
   subject.videos.push(video);

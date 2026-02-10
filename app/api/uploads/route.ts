@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+// Force Node.js runtime so server-side fs is available
+export const runtime = 'nodejs';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -28,13 +30,27 @@ export async function POST(req: NextRequest) {
     await fs.mkdir(uploadsDir, { recursive: true });
     console.log('✓ تم إنشاء/التحقق من المجلد');
 
-    // إنشاء اسم الملف
-    const timestamp = Date.now();
-    const originalName = file.name
-      .replace(/[^a-zA-Z0-9._-]/g, '_')
-      .replace(/\s+/g, '_');
-    const fileName = `${timestamp}_${originalName}`;
-    const filePath = path.resolve(uploadsDir, fileName);
+    // استخدام عنوان الفيديو كاسم الملف (حقل: 'title' أو 'videoTitle' أو 'name')
+    const titleRaw = formData.get('title') ?? formData.get('videoTitle') ?? formData.get('name') ?? file.name;
+    const title = String(titleRaw).trim() || file.name;
+    const ext = path.extname(file.name) || '';
+    const sanitizedTitle = title
+      .replace(/[^a-zA-Z0-9\u0600-\u06FF._\-\s]/g, '_')
+      .replace(/\s+/g, '_')
+      .substring(0, 150);
+
+    let fileName = `${sanitizedTitle}${ext}`;
+    let filePath = path.resolve(uploadsDir, fileName);
+
+    // إذا كان هناك ملف بنفس الاسم، أضف طابعًا زمنيًا لتجنُّب الكتابة فوقه
+    try {
+      await fs.access(filePath);
+      const ts = Date.now();
+      fileName = `${sanitizedTitle}_${ts}${ext}`;
+      filePath = path.resolve(uploadsDir, fileName);
+    } catch {
+      // الملف غير موجود — نستخدم الاسم كما هو
+    }
 
     console.log('📝 اسم الملف:', fileName);
     console.log('📍 المسار الكامل للملف:', filePath);

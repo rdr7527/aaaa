@@ -8,7 +8,9 @@ function canManageDept(req: Request, deptId: string): boolean {
   try {
     const token = m.split('=')[1];
     const payload = JSON.parse(Buffer.from(token, 'base64').toString('utf8'));
-    return payload.role === 'admin' || (payload.role === 'department_manager' && payload.departmentId === deptId);
+    return payload.role === 'admin'
+      || (payload.role === 'department_manager' && payload.departmentId === deptId)
+      || (payload.role === 'teacher' && payload.departmentId === deptId);
   } catch(e) { return false }
 }
 

@@ -635,10 +635,20 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     if (!user) return;
     if (!confirm('هل تريد حذف هذا الفيديو؟')) return;
     try {
-      const res = await fetch(`/api/departments/${user.departmentId}/subjects/${subjectId}/videos/${videoId}`, { method: 'DELETE' });
-      if (res.ok) loadDepartmentData(user.departmentId);
+      const res = await fetch(`/api/departments/${user.departmentId}/subjects/${subjectId}/videos/${videoId}`, { method: 'DELETE', credentials: 'include' });
+      if (res.ok) {
+        loadDepartmentData(user.departmentId);
+        showToast && showToast('تم حذف الفيديو', 'success');
+      } else if (res.status === 401) {
+        showToast && showToast('ليس لديك صلاحية لحذف هذا الفيديو', 'error');
+      } else {
+        const body = await res.json().catch(() => ({}));
+        showToast && showToast('فشل في حذف الفيديو: ' + (body.error || res.status), 'error');
+        console.error('فشل حذف الفيديو', res.status, body);
+      }
     } catch (e) {
       console.error(e);
+      showToast && showToast('خطأ في حذف الفيديو', 'error');
     }
   };
 
@@ -1085,26 +1095,39 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
   const filteredVideos = videos.filter(v => 
     v.title.includes(searchTerm) || v.description?.includes(searchTerm)
-  );
+  ).sort((a, b) => {
+    // الدروس الأحدث أولاً (معكوس الترتيب الطبيعي)
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : Number(a.id) || 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : Number(b.id) || 0;
+    return bTime - aTime;
+  });
 
   const filteredVideosForUser = (() => {
     // videos state is already department-scoped when loaded via loadDepartmentData,
     // so use `videos` as the base list to avoid missing items.
     const base = videos || [];
     const bySearch = userVideoSearch ? base.filter(v => (v.title || '').includes(userVideoSearch) || (v.description || '').includes(userVideoSearch)) : base;
-    if (userVideoDateFilter === 'all') return bySearch;
-    const now = Date.now();
-    const startOfToday = new Date(); startOfToday.setHours(0,0,0,0);
-    const startTodayTs = startOfToday.getTime();
-    const startYesterdayTs = startTodayTs - 24*60*60*1000;
-    const weekAgoTs = now - 7*24*60*60*1000;
-    return bySearch.filter(v => {
-      const vidTs = v.createdAt ? Date.parse(v.createdAt) : (Number(v.id) || 0);
-      if (!vidTs) return false;
-      if (userVideoDateFilter === 'today') return vidTs >= startTodayTs;
-      if (userVideoDateFilter === 'yesterday') return vidTs >= startYesterdayTs && vidTs < startTodayTs;
-      if (userVideoDateFilter === 'week') return vidTs >= weekAgoTs;
-      return true;
+    const filtered = (() => {
+      if (userVideoDateFilter === 'all') return bySearch;
+      const now = Date.now();
+      const startOfToday = new Date(); startOfToday.setHours(0,0,0,0);
+      const startTodayTs = startOfToday.getTime();
+      const startYesterdayTs = startTodayTs - 24*60*60*1000;
+      const weekAgoTs = now - 7*24*60*60*1000;
+      return bySearch.filter(v => {
+        const vidTs = v.createdAt ? Date.parse(v.createdAt) : (Number(v.id) || 0);
+        if (!vidTs) return false;
+        if (userVideoDateFilter === 'today') return vidTs >= startTodayTs;
+        if (userVideoDateFilter === 'yesterday') return vidTs >= startYesterdayTs && vidTs < startTodayTs;
+        if (userVideoDateFilter === 'week') return vidTs >= weekAgoTs;
+        return true;
+      });
+    })();
+    // الدروس الأحدث أولاً
+    return filtered.sort((a, b) => {
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : Number(a.id) || 0;
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : Number(b.id) || 0;
+      return bTime - aTime;
     });
   })();
 
