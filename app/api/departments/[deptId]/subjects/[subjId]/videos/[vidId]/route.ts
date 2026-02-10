@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { readUsersFile, writeUsersFile } from '../../../../../../../../lib/users';
+import fs from 'fs/promises';
+import path from 'path';
 
 function canManageDept(req: Request, deptId: string): boolean {
   const cookie = req.headers.get('cookie') || '';
@@ -46,6 +48,44 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ deptI
   const subject = (dept.subjects || []).find((s: any) => s.id === subjId);
   if (!subject) return NextResponse.json({ ok: false }, { status: 404 });
   
+  // العثور على الفيديو
+  const video = (subject.videos || []).find((v: any) => v.id === vidId);
+  if (!video) return NextResponse.json({ ok: false }, { status: 404 });
+  
+  // حذف الملف المرفوع إن وجد
+  if (video.lessonFile) {
+    try {
+      const projectRoot = process.cwd();
+      // استخراج اسم الملف من URL إذا كان مسار كامل
+      let fileName = video.lessonFile;
+      if (fileName.includes('/')) {
+        fileName = fileName.split('/').pop() || '';
+      }
+      
+      const filePath = path.resolve(projectRoot, 'public', 'uploads', 'faildrs', fileName);
+      
+      console.log('🗑️ محاولة حذف الملف:', fileName);
+      console.log('📍 المسار الكامل:', filePath);
+      
+      // التحقق من وجود الملف وحذفه
+      try {
+        await fs.access(filePath);
+        await fs.unlink(filePath);
+        console.log('✓ تم حذف الملف بنجاح:', fileName);
+      } catch (err: any) {
+        if (err.code === 'ENOENT') {
+          console.log('⚠️ الملف غير موجود (قد تم حذفه مسبقًا):', fileName);
+        } else {
+          console.error('❌ خطأ في حذف الملف:', err.message);
+        }
+      }
+    } catch (err) {
+      console.error('❌ خطأ في معالجة حذف الملف:', err);
+      // نستمر في حذف الفيديو من قاعدة البيانات حتى لو فشل حذف الملف
+    }
+  }
+  
+  // حذف الفيديو من قاعدة البيانات
   subject.videos = (subject.videos || []).filter((v: any) => v.id !== vidId);
   writeUsersFile(data);
   return NextResponse.json({ ok: true });
