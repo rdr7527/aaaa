@@ -125,7 +125,7 @@ export default function DepartmentPage() {
     return (
       <div className={styles.container}>
         <nav className={styles.navbar}>
-          <img src="../src/sh.png" alt="الشعار" className="appLogo" />
+          <span style={{ fontSize: '20px', fontWeight: 700, color: '#ffffff' }}>منار المعرفة</span>
           <button onClick={logout} className={styles.logoutBtn}>تسجيل الخروج</button>
         </nav>
         <div className={styles.main}>
@@ -140,8 +140,8 @@ export default function DepartmentPage() {
       <nav className={styles.navbar}>
         <div className={styles.navContent}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <img src="../src/sh.png" alt="الشعار" className="appLogo" />
-            <p className={styles.deptTitle}>منارة المعرفة </p>
+            <span style={{ fontSize: '20px', fontWeight: 700, color: '#ffffff' }}>منار المعرفة</span>
+            <p className={styles.deptTitle}></p>
           </div>
           <div className={styles.userMenu}>
             <span>{user.id}</span>

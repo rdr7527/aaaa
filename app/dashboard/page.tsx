@@ -1425,7 +1425,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
       <nav className={styles.navbar}>
         <div className={styles.navContent}>
           {user?.role === 'user' && <button onClick={() => setIsMobileMenuOpen(true)} className="mobile-navbar-toggle">☰</button>}
-          <img src="../src/sh.png" alt="الشعار" className={styles.logo} />
+          <span style={{ fontSize: '20px', fontWeight: 700, color: '#ffffff' }}>منار المعرفة</span>
           <div className={styles.userMenu}>
             <span>{ user?.id}</span>
             <button onClick={logout} className={styles.logoutBtn}>تسجيل الخروج</button>
@@ -1568,7 +1568,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                         onClick={() => setUserFilter('teacher')}
                         className={`${styles.tabButton} ${userFilter === 'teacher' ? styles.active : ''}`}
                       >
-                        مدير القسم ({users.filter(u => u.role === 'department_manager' || u.role === 'teacher').length})
+                        رئيس القسم ({users.filter(u => u.role === 'department_manager' || u.role === 'teacher').length})
                       </button>
                       <button 
                         onClick={() => setUserFilter('admin')}
@@ -1589,7 +1589,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                               <p className={styles.cardDesc}>المستخدم: {u.id}</p>
                               {u.departmentId && <p className={styles.cardDesc}>القسم: {dept ? dept.name : 'غير محدد'}</p>}
                               <p className={styles.cardDesc}>
-                                الدور: {u.role === 'admin' ? 'مسؤول النظام' : u.role === 'department_manager' ? 'مدير القسم' : u.role === 'teacher' ? 'دكتور' : 'طالب'}
+                                الدور: {u.role === 'admin' ? 'مسؤول النظام' : u.role === 'department_manager' ? 'رئيس القسم' : u.role === 'teacher' ? 'عضو هيئة التدريس' : 'طالب'}
                               </p>
                               <div className={styles.cardActions}>
                                 <button onClick={() => openEditUser(u)} className={styles.editBtn} style={{ marginRight: 8, padding: '6px 10px', background: '#1976d2', color: 'white', border: 'none', borderRadius: 4 }}>تعديل</button>
@@ -1616,7 +1616,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                         onClick={() => setTeacherSubTab('add-teacher')}
                         className={`${styles.subTabButton} ${teacherSubTab === 'add-teacher' ? styles.active : ''}`}
                       >
-                        1. إضافة أو حذف مدير القسم
+                        1. إضافة أو حذف رئيس القسم
                       </button>
                       <button 
                         onClick={() => setTeacherSubTab('add-subject')}
@@ -1628,7 +1628,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                         onClick={() => setTeacherSubTab('assign-teacher')}
                         className={`${styles.subTabButton} ${teacherSubTab === 'assign-teacher' ? styles.active : ''}`}
                       >
-                        2. ربط مدير القسم بالمواد
+                        2. ربط رئيس القسم بالمواد
                       </button>
                       <button 
                         onClick={() => setTeacherSubTab('monitor-teacher')}
@@ -1760,7 +1760,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                                     </button>
                                     <button
                                       onClick={async () => {
-                                        if (teacherSubjects.length === 0) return showToast('لا توجد مواد مرتبطة بهذا مدير القسم', 'error');
+                                        if (teacherSubjects.length === 0) return showToast('لا توجد مواد مرتبطة بهذا رئيس القسم', 'error');
                                         const subjOptions = teacherSubjects.map(s => `${s.id}|${s.name}`).join('\n');
                                         const sel = prompt('اختر المادة عبر السطر المبين (الصيغة id|name):\n' + subjOptions);
                                         if (!sel) return;
@@ -1808,7 +1808,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                                         fontSize: '12px',
                                       }}
                                     >
-                                      حذف مدير القسم
+                                      حذف رئيس القسم
                                     </button>
                                   </div>
                                 </div>
@@ -1843,7 +1843,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                             boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                           }}>
                             <h4 style={{ margin: '0 0 6px 0' }}>{subject.name}</h4>
-                            <p style={{ color: '#333', fontSize: '13px', margin: '0 0 6px 0', fontWeight: 500 }}>الدكتور: {(() => { const _t = teachers.find(t => String(t.id) === String(subject.teacherId)); return _t ? (_t.name || _t.id) : (subject.teacherId || 'غير محدد'); })()}</p>
+                            <p style={{ color: '#333', fontSize: '13px', margin: '0 0 6px 0', fontWeight: 500 }}>عضو هيئة التدريس: {(() => { const _t = teachers.find(t => String(t.id) === String(subject.teacherId)); return _t ? (_t.name || _t.id) : (subject.teacherId || 'غير محدد'); })()}</p>
                             <p style={{ color: '#666', fontSize: '14px', margin: '0' }}>{subject.description}</p>
                             {user.role === 'department_manager' && (
                               <div style={{ marginTop: '10px', display: 'flex', gap: '8px' }}>
@@ -1908,7 +1908,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
             <>
               <div className={styles.cardHeader}>
                 <div>
-                  <h2>{user.role === 'department_manager' ? 'بوابة مدير القسم' : user.role === 'teacher' ? 'بوابة الدكتور' : 'بوابة الطالب'}</h2>
+                  <h2>{user.role === 'department_manager' ? 'بوابة رئيس القسم' : user.role === 'teacher' ? 'بوابة عضو هيئة التدريس' : 'بوابة الطالب'}</h2>
                   <div style={{ marginTop: '10px', fontSize: '14px', color: '#0d47a1', lineHeight: '1.5', fontFamily: 'sans-serif' }}>
                     <p style={{ margin: '5px 0', fontWeight: '500' }}>القسم: {departments.find(d => d.id === user.departmentId)?.name || 'غير محدد'}</p>
                     <p style={{ margin: '5px 0', fontWeight: '500' }}>الاسم: {user.name || user.id}</p>
@@ -1933,9 +1933,9 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                         </div>
                       </div>
 
-                      {/* الدروس محذوفة لمستخدم مدير القسم */}
+                      {/* الدروس محذوفة لمستخدم رئيس القسم */}
 
-                      {/* مشاريع التخرج (لمدير القسم) */}
+                      {/* مشاريع التخرج (لرئيس القسم) */}
                       <div className={styles.cardItem}>
                         <div className={styles.cardItemContent}>
                           <img src="../src/svg/file.svg" alt="مشاريع" />
@@ -1947,7 +1947,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                         </div>
                       </div>
 
-                      {/* إدارة المستخدمين محذوفة لمدير القسم */}
+                      {/* إدارة المستخدمين محذوفة لرئيس القسم */}
 
                       {/* Notifications card for department_manager */}
                       <div className={styles.cardItem}>
@@ -1961,7 +1961,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                         </div>
                       </div>
 
-                      {/* الواجبات محذوفة لمستخدم مدير القسم */}
+                      {/* الواجبات محذوفة لمستخدم رئيس القسم */}
 
                       {/* إدارة المستخدمين */}
                       <div className={styles.cardItem}>
@@ -2135,7 +2135,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                                     📖 {subject.name}
                                   </h5>
                                   <p style={{ color: '#333', fontSize: '14px', margin: '0 0 10px 0', fontWeight: 500 }}>
-                                    👨‍🏫 الدكتور: {(() => { const _t = teachers.find(t => String(t.id) === String(subject.teacherId)); return _t ? (_t.name || _t.id) : (subject.teacherId || 'غير محدد'); })()}
+                                    👨‍🏫 عضو هيئة التدريس: {(() => { const _t = teachers.find(t => String(t.id) === String(subject.teacherId)); return _t ? (_t.name || _t.id) : (subject.teacherId || 'غير محدد'); })()}
                                   </p>
                                   <p style={{ color: '#666', fontSize: '14px', margin: '0', lineHeight: '1.4' }}>{subject.description}</p>
                                 </div>
@@ -2820,7 +2820,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                       <select value={notifTarget} onChange={(e) => setNotifTarget(e.target.value as any)} className={styles.searchInput}>
                         <option value="all">الكل</option>
                         <option value="departments">أقسام</option>
-                        <option value="doctor">دكتور</option>
+                        <option value="doctor">عضو هيئة التدريس</option>
                         <option value="students">طلاب</option>
                       </select>
                     )}
@@ -3031,7 +3031,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                         <p style={{ color: '#666', fontSize: '13px', margin: '0 0 10px 0', lineHeight: '1.5' }}>{subject.description}</p>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: '10px 0', fontSize: '13px', color: '#6a1b9a', fontWeight: '500' }}>
                           <span>👨‍🏫</span>
-                          <span>الدكتور: {(() => { const _t = teachers.find(t => String(t.id) === String(subject.teacherId)); return _t ? (_t.name || _t.id) : (subject.teacherId || 'غير محدد'); })()}</span>
+                          <span>عضو هيئة التدريس: {(() => { const _t = teachers.find(t => String(t.id) === String(subject.teacherId)); return _t ? (_t.name || _t.id) : (subject.teacherId || 'غير محدد'); })()}</span>
                         </div>
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                           <button onClick={() => handleEditSubjectForManager(subject.id)} style={{ padding: '8px 14px', fontSize: '13px', fontWeight: '600', background: '#2196f3', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.2s', flex: 1 }} onMouseEnter={(e) => e.currentTarget.style.background = '#0b7dda'} onMouseLeave={(e) => e.currentTarget.style.background = '#2196f3'}>✏️ تعديل</button>
@@ -3287,7 +3287,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                 {user?.role === 'department_manager' && (
                   <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                     <button onClick={() => setModalStudentsFilter('all')} style={{ padding: '6px 12px', fontSize: '14px', background: modalStudentsFilter === 'all' ? '#007bff' : '#f8f9fa', color: modalStudentsFilter === 'all' ? 'white' : 'black', border: '1px solid #ccc', borderRadius: 4 }}>الكل</button>
-                    <button onClick={() => setModalStudentsFilter('teacher')} style={{ padding: '6px 12px', fontSize: '14px', background: modalStudentsFilter === 'teacher' ? '#007bff' : '#f8f9fa', color: modalStudentsFilter === 'teacher' ? 'white' : 'black', border: '1px solid #ccc', borderRadius: 4 }}>دكتور</button>
+                    <button onClick={() => setModalStudentsFilter('teacher')} style={{ padding: '6px 12px', fontSize: '14px', background: modalStudentsFilter === 'teacher' ? '#007bff' : '#f8f9fa', color: modalStudentsFilter === 'teacher' ? 'white' : 'black', border: '1px solid #ccc', borderRadius: 4 }}>عضو هيئة التدريس</button>
                     <button onClick={() => setModalStudentsFilter('user')} style={{ padding: '6px 12px', fontSize: '14px', background: modalStudentsFilter === 'user' ? '#007bff' : '#f8f9fa', color: modalStudentsFilter === 'user' ? 'white' : 'black', border: '1px solid #ccc', borderRadius: 4 }}>الطلاب</button>
                   </div>
                 )}
@@ -3326,7 +3326,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                             <h5 style={{ margin: '0 0 8px 0' }}>{student.name || student.id}</h5>
                             <p style={{ color: '#666', fontSize: '12px', margin: '0 0 5px 0' }}>المستخدم: {student.id}</p>
                             {student.departmentId && <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>القسم: {dept ? dept.name : 'غير محدد'}</p>}
-                            <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>الدور: {student.role === 'admin' ? 'مسؤول النظام' : student.role === 'department_manager' ? 'مدير القسم' : student.role === 'teacher' ? 'دكتور' : 'طالب'}</p>
+                            <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>الدور: {student.role === 'admin' ? 'مسؤول النظام' : student.role === 'department_manager' ? 'رئيس القسم' : student.role === 'teacher' ? 'عضو هيئة التدريس' : 'طالب'}</p>
                             <div style={{ display: 'flex', gap: 8 }}>
                               <button onClick={() => openEditUser(student)} style={{ padding: '4px 8px', fontSize: '12px', background: '#1976d2', color: 'white', border: 'none', borderRadius: '4px' }}>تعديل</button>
                               <button onClick={() => handleDeleteUser(student.id)} style={{ padding: '4px 8px', fontSize: '12px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '4px' }}>حذف</button>
@@ -3479,8 +3479,8 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                 <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                   <button onClick={() => setModalUserFilter('all')} style={{ padding: '6px 12px', fontSize: '14px', background: modalUserFilter === 'all' ? '#007bff' : '#f8f9fa', color: modalUserFilter === 'all' ? 'white' : 'black', border: '1px solid #ccc', borderRadius: 4 }}>الكل</button>
                   <button onClick={() => setModalUserFilter('admin')} style={{ padding: '6px 12px', fontSize: '14px', background: modalUserFilter === 'admin' ? '#007bff' : '#f8f9fa', color: modalUserFilter === 'admin' ? 'white' : 'black', border: '1px solid #ccc', borderRadius: 4 }}>مسؤول النظام</button>
-                  <button onClick={() => setModalUserFilter('department_manager')} style={{ padding: '6px 12px', fontSize: '14px', background: modalUserFilter === 'department_manager' ? '#007bff' : '#f8f9fa', color: modalUserFilter === 'department_manager' ? 'white' : 'black', border: '1px solid #ccc', borderRadius: 4 }}>مدير القسم</button>
-                  <button onClick={() => setModalUserFilter('teacher')} style={{ padding: '6px 12px', fontSize: '14px', background: modalUserFilter === 'teacher' ? '#007bff' : '#f8f9fa', color: modalUserFilter === 'teacher' ? 'white' : 'black', border: '1px solid #ccc', borderRadius: 4 }}>دكتور</button>
+                  <button onClick={() => setModalUserFilter('department_manager')} style={{ padding: '6px 12px', fontSize: '14px', background: modalUserFilter === 'department_manager' ? '#007bff' : '#f8f9fa', color: modalUserFilter === 'department_manager' ? 'white' : 'black', border: '1px solid #ccc', borderRadius: 4 }}>رئيس القسم</button>
+                  <button onClick={() => setModalUserFilter('teacher')} style={{ padding: '6px 12px', fontSize: '14px', background: modalUserFilter === 'teacher' ? '#007bff' : '#f8f9fa', color: modalUserFilter === 'teacher' ? 'white' : 'black', border: '1px solid #ccc', borderRadius: 4 }}>عضو هيئة التدريس</button>
                   <button onClick={() => setModalUserFilter('user')} style={{ padding: '6px 12px', fontSize: '14px', background: modalUserFilter === 'user' ? '#007bff' : '#f8f9fa', color: modalUserFilter === 'user' ? 'white' : 'black', border: '1px solid #ccc', borderRadius: 4 }}>الطلاب</button>
                 </div>
 
@@ -3517,7 +3517,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                               <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>{'المستخدم: ' + (u.id || '')}</p>
                               {u.departmentId && <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>القسم: {dept ? dept.name : 'غير محدد'}</p>}
                               <p style={{ color: '#666', fontSize: '12px', margin: '0 0 8px 0' }}>
-                                الدور: {u.role === 'user' ? 'طالب' : u.role === 'teacher' ? 'دكتور' : u.role === 'department_manager' ? 'مدير القسم' : u.role === 'admin' ? 'مسؤول النظام' : u.role}
+                                الدور: {u.role === 'user' ? 'طالب' : u.role === 'teacher' ? 'عضو هيئة التدريس' : u.role === 'department_manager' ? 'رئيس القسم' : u.role === 'admin' ? 'مسؤول النظام' : u.role}
                               </p>
                               <div style={{ display: 'flex', gap: '6px' }}>
                                 <button onClick={() => openEditUser(u)} style={{ padding: '4px 8px', fontSize: '12px', background: '#1976d2', color: 'white', border: 'none', borderRadius: '4px' }}>تعديل</button>
@@ -3714,7 +3714,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
                               <strong style={{ fontSize: 14 }}>{subject.name}</strong>
-                              <div style={{ fontSize: 12, color: '#666' }}>{teacher ? `الدكتور: ${teacher.name || teacher.id}` : 'بدون دكتور'}</div>
+                              <div style={{ fontSize: 12, color: '#666' }}>{teacher ? `عضو هيئة التدريس: ${teacher.name || teacher.id}` : 'بدون عضو هيئة تدريس'}</div>
                             </div>
                             <div style={{ display: 'flex', gap: 8 }}>
                               {(user.role === 'admin') ? (
@@ -4130,8 +4130,8 @@ function AddUserForm({ departments, subjects, onAdd, allowedRoles = ['user', 'te
         style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
       >
         {allowedRoles.includes('admin') && <option value="admin">مسؤول النظام</option>}
-        {allowedRoles.includes('department_manager') && <option value="department_manager">مدير القسم</option>}
-        {allowedRoles.includes('teacher') && <option value="teacher">دكتور</option>}
+        {allowedRoles.includes('department_manager') && <option value="department_manager">رئيس القسم</option>}
+        {allowedRoles.includes('teacher') && <option value="teacher">عضو هيئة التدريس</option>}
         {allowedRoles.includes('user') && <option value="user">طالب</option>}
         
         
@@ -4225,7 +4225,7 @@ function AddTeacherForm({ departments, onAdd }: { departments: any[], onAdd: (us
         ))}
       </select>
       <button type="submit" style={{ padding: '10px', background: '#1565c0', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-        إضافة مدير القسم
+        إضافة رئيس القسم
       </button>
     </form>
   );
@@ -4325,7 +4325,7 @@ function AddSubjectForm({ departments = [], teachers = [], onAdd, user }: { depa
           required
           style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
         >
-          <option value="">اختر الدكتور للقسم</option>
+          <option value="">اختر عضو هيئة التدريس للقسم</option>
           {teachersForDept.map((teacher: any) => (
             <option key={teacher.id} value={teacher.id}>{teacher.name || teacher.id}</option>
           ))}

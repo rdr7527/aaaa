@@ -125,9 +125,8 @@ export default function AdminPanel() {
     <div className={styles.container}>
       <header className={styles.navbar} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <img src="../src/sh.png" alt="الشعار" className="appLogo" />
+          <span style={{ fontSize: '24px', fontWeight: 700, color: '#ffffff' }}>منار المعرفة</span>
           <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
-            <span style={{ fontSize: '16px', fontWeight: 700 }}>منارة المعرفة</span>
             <small style={{ fontSize: '12px', color: '#ffffffcc' }}>إدارة النظام</small>
           </div>
         </div>
@@ -333,7 +332,7 @@ function UsersTab({ users, onAdd, onDelete, departments, searchTerm }: any) {
         />
         <select value={role} onChange={e => setRole(e.target.value)}>
           <option value="user">طالب</option>
-          <option value="department_manager">مدير القسم</option>
+          <option value="department_manager">رئيس القسم</option>
           <option value="admin">مسؤول النظام</option>
         </select>
         <select value={departmentId} onChange={e => setDepartmentId(e.target.value)}>
@@ -359,7 +358,7 @@ function UsersTab({ users, onAdd, onDelete, departments, searchTerm }: any) {
             return (
               <Item key={u.id} onDelete={() => onDelete(u.id)}>
                 <h3>{u.name || u.id} {u.deputyAccess ? <span style={{ fontSize: '0.9em', color: '#0a74ff', marginLeft: 8 }}>(نائب)</span> : null}</h3>
-                <p>المستخدم: {u.id} | الدور: {u.role === 'admin' ? 'مسؤول النظام' : (u.role === 'department_manager' || u.role === 'teacher') ? 'مدير القسم' : 'طالب'}</p>
+                <p>المستخدم: {u.id} | الدور: {u.role === 'admin' ? 'مسؤول النظام' : (u.role === 'department_manager' || u.role === 'teacher') ? 'رئيس القسم' : 'طالب'}</p>
                 {u.departmentId && <p>القسم: {dept ? dept.name : 'غير محدد'}</p>}
               </Item>
             );

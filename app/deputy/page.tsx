@@ -159,9 +159,8 @@ export default function DeputyPanel() {
     <div className={styles.container}>
       <header className={styles.navbar} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <img src="../src/sh.png" alt="الشعار" style={{ width: '48px', height: '48px', objectFit: 'contain' }} />
+          <span style={{ fontSize: '24px', fontWeight: 700, color: '#ffffff' }}>منار المعرفة</span>
           <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
-            <span style={{ fontSize: '16px', fontWeight: 700 }}>منارة المعرفة</span>
             <small style={{ fontSize: '12px', color: '#ffffffcc' }}>صلاحيات نائب المدير - إدارة القسم</small>
           </div>
         </div>
@@ -263,7 +262,7 @@ export default function DeputyPanel() {
                   <div>
                     <h3>{s.name}</h3>
                     <p>{s.description}</p>
-                    <p>مدير القسم الحالي: {s.teacherId ? users.find(u => u.id === s.teacherId)?.name || s.teacherId : 'غير محدد'}</p>
+                    <p>رئيس القسم الحالي: {s.teacherId ? users.find(u => u.id === s.teacherId)?.name || s.teacherId : 'غير محدد'}</p>
                   </div>
                   <select onChange={e => assignTeacherToSubject(e.target.value, s.id)}>
                     <option value="">اختر معلم</option>

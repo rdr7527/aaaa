@@ -80,12 +80,6 @@ input, button, textarea, select {
 }
 
 /* Logo sizing for desktop screens in pages with header */
-@media (min-width: 768px) {
-  img[src$="sh.png"], img[src$="/sh.png"] {
-    width: 110px !important;
-    height: auto !important;
-  }
-}
 
 /* Special sizing for login page logo */
 .login-logo {
