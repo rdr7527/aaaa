@@ -1422,14 +1422,16 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
           </div>
         </div>
       )}
-      <nav className={styles.navbar}>
-        <div className={styles.navContent}>
-          {user?.role === 'user' && <button onClick={() => setIsMobileMenuOpen(true)} className="mobile-navbar-toggle">☰</button>}
-          <span style={{ fontSize: '20px', fontWeight: 700, color: '#ffffff' }}>منار المعرفة</span>
-          <div className={styles.userMenu}>
-            <span>{ user?.id}</span>
-            <button onClick={logout} className={styles.logoutBtn}>تسجيل الخروج</button>
-          </div>
+      <nav className={styles.navbar} style={{ display: 'flex', justifyContent: 'center', position: 'relative' }}>
+        <div style={{ position: 'absolute', left: '10px' }}>
+          <button onClick={logout} className={styles.logoutBtn}>تسجيل الخروج</button>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {user?.role === 'user' && <button onClick={() => setIsMobileMenuOpen(true)} className="mobile-navbar-toggle" style={{ position: 'absolute', left: '35px' }}>☰</button>}
+          <span style={{ fontSize: '32px', fontWeight: 700, color: '#ffffff' }}>منارة المعرفة</span>
+        </div>
+        <div className={styles.userMenu} style={{ position: 'absolute', right: '10px' }}>
+          <span>{ user?.id}</span>
         </div>
       </nav>
 
@@ -1907,14 +1909,16 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
           ) : (
             <>
               <div className={styles.cardHeader}>
-                <div>
-                  <h2>{user.role === 'department_manager' ? 'بوابة رئيس القسم' : user.role === 'teacher' ? 'بوابة عضو هيئة التدريس' : 'بوابة الطالب'}</h2>
-                  <div style={{ marginTop: '10px', fontSize: '14px', color: '#0d47a1', lineHeight: '1.5', fontFamily: 'sans-serif' }}>
-                    <p style={{ margin: '5px 0', fontWeight: '500' }}>القسم: {departments.find(d => d.id === user.departmentId)?.name || 'غير محدد'}</p>
-                    <p style={{ margin: '5px 0', fontWeight: '500' }}>الاسم: {user.name || user.id}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <div>
+                    <h2>{user.role === 'department_manager' ? 'بوابة رئيس القسم' : user.role === 'teacher' ? 'بوابة عضو هيئة التدريس' : 'بوابة الطالب'}</h2>
+                    <div style={{ marginTop: '10px', fontSize: '14px', color: '#0d47a1', lineHeight: '1.5', fontFamily: 'sans-serif' }}>
+                      <p style={{ margin: '5px 0', fontWeight: '500' }}>القسم: {departments.find(d => d.id === user.departmentId)?.name || 'غير محدد'}</p>
+                      <p style={{ margin: '5px 0', fontWeight: '500' }}>الاسم: {user.name || user.id}</p>
+                    </div>
                   </div>
                 </div>
-                <p className={styles.role}>{user.role}</p>
+                <img src="/src/sh.png" alt="بوابة" style={{ height: '140px', width: '290px', marginRight: '60px' }} />
               </div>
               <div className={styles.content}>
                 {user.role === 'department_manager' ? (

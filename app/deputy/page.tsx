@@ -157,15 +157,18 @@ export default function DeputyPanel() {
 
   return (
     <div className={styles.container}>
-      <header className={styles.navbar} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <header className={styles.navbar} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+        <div style={{ position: 'absolute', left: '10px' }}>
+          <button onClick={async () => { await fetch('/api/logout', { method: 'POST' }); router.push('/login'); }} className={styles.logoutBtn} style={{ padding: '8px 12px' }}>تسجيل الخروج</button>
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '24px', fontWeight: 700, color: '#ffffff' }}>منار المعرفة</span>
+          <span style={{ fontSize: '32px', fontWeight: 700, color: '#ffffff' }}>منارة المعرفة</span>
           <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
             <small style={{ fontSize: '12px', color: '#ffffffcc' }}>صلاحيات نائب المدير - إدارة القسم</small>
           </div>
         </div>
-        <div>
-          <button onClick={async () => { await fetch('/api/logout', { method: 'POST' }); router.push('/login'); }} className={styles.logoutBtn} style={{ padding: '8px 12px' }}>تسجيل الخروج</button>
+        <div style={{ position: 'absolute', right: '10px' }}>
+          <span>{user.id}</span>
         </div>
       </header>
 

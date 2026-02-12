@@ -124,9 +124,11 @@ export default function DepartmentPage() {
   if (!user || !department) {
     return (
       <div className={styles.container}>
-        <nav className={styles.navbar}>
-          <span style={{ fontSize: '20px', fontWeight: 700, color: '#ffffff' }}>منار المعرفة</span>
-          <button onClick={logout} className={styles.logoutBtn}>تسجيل الخروج</button>
+        <nav className={styles.navbar} style={{ display: 'flex', justifyContent: 'center', position: 'relative' }}>
+          <div style={{ position: 'absolute', left: '10px' }}>
+            <button onClick={logout} className={styles.logoutBtn}>تسجيل الخروج</button>
+          </div>
+          <span style={{ fontSize: '32px', fontWeight: 700, color: '#ffffff' }}>منارة المعرفة</span>
         </nav>
         <div className={styles.main}>
           <p>لم تتم إضافتك إلى أي قسم</p>
@@ -137,16 +139,16 @@ export default function DepartmentPage() {
 
   return (
     <div className={styles.container}>
-      <nav className={styles.navbar}>
-        <div className={styles.navContent}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '20px', fontWeight: 700, color: '#ffffff' }}>منار المعرفة</span>
-            <p className={styles.deptTitle}></p>
-          </div>
-          <div className={styles.userMenu}>
-            <span>{user.id}</span>
-            <button onClick={logout} className={styles.logoutBtn}>تسجيل الخروج</button>
-          </div>
+      <nav className={styles.navbar} style={{ display: 'flex', justifyContent: 'center', position: 'relative' }}>
+        <div style={{ position: 'absolute', left: '10px' }}>
+          <button onClick={logout} className={styles.logoutBtn}>تسجيل الخروج</button>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '32px', fontWeight: 700, color: '#ffffff' }}>منارة المعرفة</span>
+          <p className={styles.deptTitle}></p>
+        </div>
+        <div className={styles.userMenu} style={{ position: 'absolute', right: '10px' }}>
+          <span>{user.id}</span>
         </div>
       </nav>
 
