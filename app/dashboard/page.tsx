@@ -54,6 +54,7 @@ export default function Dashboard() {
   const [addStudentId, setAddStudentId] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [viewStudentsSubjectId, setViewStudentsSubjectId] = useState<string | null>(null);
+  const [showDeptStudentsModal, setShowDeptStudentsModal] = useState(false);
 
 const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   
@@ -1086,15 +1087,15 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   }, [selectedVideo, apiLoaded]);
 
   const filteredDepartments = departments.filter(d => 
-    d.name.includes(searchTerm) || d.description?.includes(searchTerm)
+    d.name.toLowerCase().includes(searchTerm.toLowerCase()) || d.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const filteredSubjects = subjects.filter(s => 
-    s.name.includes(searchTerm) || s.description?.includes(searchTerm)
+    s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const filteredVideos = videos.filter(v => 
-    v.title.includes(searchTerm) || v.description?.includes(searchTerm)
+    v.title.toLowerCase().includes(searchTerm.toLowerCase()) || v.description?.toLowerCase().includes(searchTerm.toLowerCase())
   ).sort((a, b) => {
     // الدروس الأحدث أولاً (معكوس الترتيب الطبيعي)
     const aTime = a.createdAt ? new Date(a.createdAt).getTime() : Number(a.id) || 0;
@@ -1106,7 +1107,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     // videos state is already department-scoped when loaded via loadDepartmentData,
     // so use `videos` as the base list to avoid missing items.
     const base = videos || [];
-    const bySearch = userVideoSearch ? base.filter(v => (v.title || '').includes(userVideoSearch) || (v.description || '').includes(userVideoSearch)) : base;
+    const bySearch = userVideoSearch ? base.filter(v => (v.title || '').toLowerCase().includes(userVideoSearch.toLowerCase()) || (v.description || '').toLowerCase().includes(userVideoSearch.toLowerCase())) : base;
     const filtered = (() => {
       if (userVideoDateFilter === 'all') return bySearch;
       const now = Date.now();
@@ -1132,15 +1133,15 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   })();
 
   const filteredUsers = users.filter(u => 
-    (u.id || '').includes(searchTerm) || 
-    (u.name || '').includes(searchTerm) || 
-    (u.role || '').includes(searchTerm)
+    (u.id || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (u.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (u.role || '').toLowerCase().includes(searchTerm.toLowerCase())
   ).filter(u => userFilter === 'all' || u.role === userFilter);
 
   const teachers = users.filter(u => u.role === 'department_manager' || u.role === 'teacher');
   const filteredTeachers = teachers.filter(t => 
-    (t.id || '').includes(searchTerm) || 
-    (t.name || '').includes(searchTerm)
+    (t.id || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (t.name || '').toLowerCase().includes(searchTerm.toLowerCase())
   ).filter(t => teacherFilter === 'all' || t.role === teacherFilter);
 
   const students = users.filter(u => u.role === 'user');
@@ -1154,14 +1155,14 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
         const isDoctor = u.role === 'teacher' && sameDept; // exclude other department_manager users
         return isStudent || isDoctor;
       }).filter(s => 
-        (s.id || '').includes(searchTerm) || 
-        (s.name || '').includes(searchTerm)
+        (s.id || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (s.name || '').toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
     return students.filter(s => 
-      (s.id || '').includes(searchTerm) || 
-      (s.name || '').includes(searchTerm)
+      (s.id || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+      (s.name || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
   })();
 
@@ -1399,6 +1400,77 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                 <button onClick={() => { setShowAddStudentModal(false); setAddStudentSubjectId(null); setAddStudentId(null); }} style={{ padding: '10px 20px', borderRadius: 6, border: '1px solid #ccc', background: '#f5f5f5', color: '#333', cursor: 'pointer', fontWeight: '600', fontSize: '14px', transition: 'all 0.2s' }} onMouseEnter={(e) => { e.currentTarget.style.background = '#e0e0e0'; }} onMouseLeave={(e) => { e.currentTarget.style.background = '#f5f5f5'; }}>إلغاء</button>
                 <button onClick={handleAddStudentToSubject} style={{ padding: '10px 20px', borderRadius: 6, border: 'none', background: '#4caf50', color: 'white', cursor: 'pointer', fontWeight: '600', fontSize: '14px', transition: 'all 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.background = '#45a049'} onMouseLeave={(e) => e.currentTarget.style.background = '#4caf50'}>✓ إضافة</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {showDeptStudentsModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000, overflowY: 'auto', padding: '20px' }}>
+          <div style={{ background: 'white', padding: 24, borderRadius: 12, width: 700, maxWidth: '95%', direction: 'rtl', boxShadow: '0 10px 40px rgba(0,0,0,0.3)' }}>
+            <button onClick={() => setShowDeptStudentsModal(false)} style={{ position: 'absolute', left: 16, top: 16, fontSize: 24, border: 'none', background: 'none', cursor: 'pointer', color: '#999' }}>✕</button>
+            <h3 style={{ marginTop: 0, marginBottom: 20, color: '#2e7d32', fontSize: '22px', display: 'flex', alignItems: 'center', gap: '8px' }}>👥 طلاب القسم</h3>
+            <div style={{ marginBottom: '20px', padding: '12px', background: '#f1f8f6', borderRadius: '8px', border: '2px solid #4caf50' }}>
+              <p style={{ margin: 0, color: '#2e7d32', fontWeight: 'bold' }}>إجمالي الطلاب: {users.filter(u => u.role === 'user' && String(u.departmentId) === String(user?.departmentId)).length}</p>
+            </div>
+            {users.filter(u => u.role === 'user' && String(u.departmentId) === String(user?.departmentId)).length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: '#999' }}>
+                <p style={{ fontSize: '16px', margin: 0 }}>لا يوجد طلاب مسجلين في هذا القسم</p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '15px', marginBottom: '20px' }}>
+                {users.filter(u => u.role === 'user' && String(u.departmentId) === String(user?.departmentId)).map((student: any) => (
+                  <div key={student.id} style={{
+                    border: '2px solid #4caf50',
+                    padding: '15px',
+                    borderRadius: '10px',
+                    background: 'linear-gradient(135deg, #f1f8f6 0%, #fff 100%)',
+                    boxShadow: '0 2px 8px rgba(76, 175, 80, 0.15)',
+                    transition: 'all 0.2s',
+                    position: 'relative'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = '0 4px 16px rgba(76, 175, 80, 0.25)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(76, 175, 80, 0.15)';
+                  }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '12px' }}>
+                      <span style={{ fontSize: '24px', flexShrink: 0 }}>👤</span>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ color: '#2e7d32', fontWeight: 'bold', margin: '0 0 4px 0', fontSize: '16px' }}>{student.name || student.id}</p>
+                        <p style={{ color: '#666', margin: '0', fontSize: '12px' }}>المعرف: {student.id}</p>
+                      </div>
+                    </div>
+                    <button onClick={async () => {
+                      if (confirm(`هل متأكد من حذف ${student.name || student.id}؟`)) {
+                        await handleDeleteUser(student.id);
+                        setShowDeptStudentsModal(false);
+                      }
+                    }} style={{
+                      width: '100%',
+                      padding: '10px',
+                      marginTop: '10px',
+                      background: '#d32f2f',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: '600',
+                      fontSize: '14px',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#b71c1c'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = '#d32f2f'}
+                    >🗑️ حذف الطالب</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+              <button onClick={() => setShowDeptStudentsModal(false)} style={{ padding: '10px 24px', borderRadius: 6, border: '1px solid #ccc', background: '#f5f5f5', color: '#333', cursor: 'pointer', fontWeight: '600', fontSize: '14px', transition: 'all 0.2s' }} onMouseEnter={(e) => { e.currentTarget.style.background = '#e0e0e0'; }} onMouseLeave={(e) => { e.currentTarget.style.background = '#f5f5f5'; }}>إغلاق</button>
             </div>
           </div>
         </div>
@@ -2054,7 +2126,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                           </div>
                           <div className={styles.cardItemActions}>
                             <p onClick={(e) => { e.stopPropagation(); (async () => { if (user?.departmentId) await loadDepartmentData(user.departmentId); setShowAddStudentModal(true); })(); }} style={{ color: '#1565c0', fontWeight: '500', cursor: 'pointer' }}>➕ إضافة طالب للمادة</p>
-                            <p onClick={(e) => { e.stopPropagation(); setViewStudentsSubjectId(null); setViewModalType('view_subject_students'); }} style={{ color: '#2196f3', fontWeight: '600', cursor: 'pointer' }}>👥 عرض طلاب المادة</p>
+                            <p onClick={(e) => { e.stopPropagation(); setShowDeptStudentsModal(true); }} style={{ color: '#1565c0', fontWeight: '600', cursor: 'pointer' }}>👥 عرض طلاب القسم</p>
                             <p onClick={(e) => { e.stopPropagation(); setViewModalType('subjects'); }} style={{ color: '#2196f3', fontWeight: '600', cursor: 'pointer' }}>📚 المواد التي تدرسها ({subjects.filter(s => s.teacherId === user.id).length})</p>
                           </div>
                         </div>
@@ -2283,14 +2355,16 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                             <div style={{ marginBottom: '20px' }}>
                               <h3 style={{ color: '#1565c0', margin: '0 0 15px 0' }}>📋 المادة: {subjects.find(s => s.id === viewStudentsSubjectId)?.name}</h3>
                               {(() => {
-                                const subject = subjects.find(s => s.id === viewStudentsSubjectId);
-                                const studentList = subject?.students || [];
-                                if (studentList.length === 0) {
+                                const selectedSubject = subjects.find(s => s.id === viewStudentsSubjectId);
+                                const enrolledStudents = (selectedSubject?.students || []);
+                                
+                                if (enrolledStudents.length === 0) {
                                   return <p style={{ color: '#999', fontSize: '16px', textAlign: 'center', padding: '40px 20px' }}>لا يوجد طلاب مسجلون في هذه المادة</p>;
                                 }
+                                
                                 return (
                                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '15px' }}>
-                                    {studentList.map((studentId: string) => {
+                                    {enrolledStudents.map((studentId: string) => {
                                       const student = users.find(u => u.id === studentId);
                                       return (
                                         <div key={studentId} style={{
