@@ -1503,7 +1503,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
           <span style={{ fontSize: '32px', fontWeight: 700, color: '#ffffff' }}>منارة المعرفة</span>
         </div>
         <div className={styles.userMenu} style={{ position: 'absolute', right: '10px' }}>
-          <span>{ user?.id}</span>
+          <span style={{ fontWeight: 'bold', fontSize: '16px', color: '#ffffff', letterSpacing: '0.5px', fontFamily: "'Segoe UI', 'Arial', sans-serif" }}>{ user?.id}</span>
         </div>
       </nav>
 
@@ -1512,8 +1512,11 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
           {user.role === 'admin' ? (
             <>
               <div className={styles.cardHeader}>
-                <h2>لوحة تحكم المدير</h2>
-                <p className={styles.role}>مسؤول</p>
+                <div>
+                  <h2>لوحة تحكم المدير</h2>
+                
+                </div>
+                <img src="/src/sh.png" alt="بوابة" style={{ height: '140px', width: '290px', marginRight: '60px' }} />
               </div>
               <div className={styles.content}>
                 
