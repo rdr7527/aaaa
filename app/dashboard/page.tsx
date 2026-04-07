@@ -1551,7 +1551,7 @@ export default function Dashboard() {
                 
 
                 <div className={styles.cardGrid}>
-                  <div className={styles.cardItem} onClick={() => setActiveTab('departments')}>
+                  <div className={styles.cardItem} style={{ border: '2px solid #1976d2', background: 'linear-gradient(135deg, #e3f2fd 0%, #ffffff 100%)', boxShadow: '0 4px 12px rgba(25, 118, 210, 0.18)' }} onClick={() => setActiveTab('departments')}>
                     <div className={styles.cardItemContent}>
                       <img src="../src/svg/book.svg" alt="" />
                       <h4>إدارة الأقسام</h4>
@@ -1562,7 +1562,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                   {user.role === 'admin' && (
-                    <div className={styles.cardItem}>
+                    <div className={styles.cardItem} style={{ border: '2px solid #2e7d32', background: 'linear-gradient(135deg, #e8f5e9 0%, #ffffff 100%)', boxShadow: '0 4px 12px rgba(46, 125, 50, 0.18)' }}>
                       <div className={styles.cardItemContent}>
                         <img src="../src/svg/student.svg" alt="" />
                         <h4>إدارة المستخدمين</h4>
@@ -1575,7 +1575,7 @@ export default function Dashboard() {
                   )}
                   
                   {((user.role === 'department_manager') || (user.role === 'teacher')) && (
-                    <div className={styles.cardItem} onClick={() => setActiveTab('subjects')}>
+                    <div className={styles.cardItem} style={{ border: '2px solid #8e24aa', background: 'linear-gradient(135deg, #f3e5f5 0%, #ffffff 100%)', boxShadow: '0 4px 12px rgba(142, 36, 170, 0.18)' }} onClick={() => setActiveTab('subjects')}>
                       <div className={styles.cardItemContent}>
                         <img src="../src/svg/book.svg" alt="" />
                         <h4>إدارة المواد</h4>
@@ -1587,7 +1587,7 @@ export default function Dashboard() {
                     </div>
                   )}
                   {user.role === 'department_manager' && (
-                    <div className={styles.cardItem} onClick={() => setActiveTab('videos')}>
+                    <div className={styles.cardItem} style={{ border: '2px solid #f57c00', background: 'linear-gradient(135deg, #fff3e0 0%, #ffffff 100%)', boxShadow: '0 4px 12px rgba(245, 124, 0, 0.18)' }} onClick={() => setActiveTab('videos')}>
                       <div className={styles.cardItemContent}>
                         <img src="../src/svg/video.svg" alt="" />
                         <h4>إدارة الفيديوهات</h4>
@@ -1602,7 +1602,7 @@ export default function Dashboard() {
 
 
                   {/* Notifications card */}
-                  <div className={styles.cardItem}>
+                  <div className={styles.cardItem} style={{ border: '2px solid #d84315', background: 'linear-gradient(135deg, #ffccbc 0%, #ffffff 100%)', boxShadow: '0 4px 12px rgba(216, 67, 21, 0.18)' }}>
                     <div className={styles.cardItemContent}>
                       <img src="../src/svg/notification.svg" alt="" />
                       <h4>التنبيهات</h4>
@@ -1615,8 +1615,8 @@ export default function Dashboard() {
 
                   {/* Graduation projects card (admin) */}
                   {user.role === 'admin' && (
-                    <div className={styles.cardItem}>
-                      <div className={styles.cardItemContent}>
+                    <div className={styles.cardItem} style={{ border: '2px solid #3949ab', background: 'linear-gradient(135deg, #e8eaf6 0%, #ffffff 100%)', boxShadow: '0 4px 12px rgba(57, 73, 171, 0.18)' }}>
+                      <div className={styles.cardItemContent}> 
                         <img src="../src/svg/file.svg" alt="" />
                         <h4>مشاريع التخرج</h4>
                       </div>
@@ -1630,7 +1630,7 @@ export default function Dashboard() {
                   {/* Department courses management card removed as requested */}
 
                   {/* Library card */}
-                  <div className={styles.cardItem}>
+                  <div className={styles.cardItem} style={{ border: '2px solid #6d4c41', background: 'linear-gradient(135deg, #efebe9 0%, #ffffff 100%)', boxShadow: '0 4px 12px rgba(109, 76, 65, 0.18)' }}>
                     <div className={styles.cardItemContent}>
                       <img src="../src/svg/book.svg" alt="" />
                       <h4>المكتبة</h4>
@@ -2030,7 +2030,7 @@ export default function Dashboard() {
                     <h3>إدارة قسمك</h3>
                     <div className={styles.cardGrid}>
                       {/* المواد */}
-                      <div className={styles.cardItem}>
+                      <div className={styles.cardItem} style={{ border: '2px solid #1e88e5', background: 'linear-gradient(135deg, #e3f2fd 0%, #ffffff 100%)', boxShadow: '0 4px 12px rgba(30, 136, 229, 0.18)' }}>
                         <div className={styles.cardItemContent}>
                           <img src="../src/svg/book.svg" alt="كتاب" />
                           <h4>المواد</h4>
@@ -2055,7 +2055,7 @@ export default function Dashboard() {
                       {/* الدروس محذوفة لمستخدم رئيس القسم */}
 
                       {/* مشاريع التخرج (لرئيس القسم) */}
-                      <div className={styles.cardItem}>
+                      <div className={styles.cardItem} style={{ border: '2px solid #7b1fa2', background: 'linear-gradient(135deg, #f3e5f5 0%, #ffffff 100%)', boxShadow: '0 4px 12px rgba(123, 31, 162, 0.18)' }}>
                         <div className={styles.cardItemContent}>
                           <img src="../src/svg/file.svg" alt="مشاريع" />
                           <h4>مشاريع التخرج</h4>
@@ -2069,7 +2069,7 @@ export default function Dashboard() {
                       {/* إدارة المستخدمين محذوفة لرئيس القسم */}
 
                       {/* Notifications card for department_manager */}
-                      <div className={styles.cardItem}>
+                      <div className={styles.cardItem} style={{ border: '2px solid #fb8c00', background: 'linear-gradient(135deg, #fff3e0 0%, #ffffff 100%)', boxShadow: '0 4px 12px rgba(251, 140, 0, 0.18)' }}>
                         <div className={styles.cardItemContent}>
                           <img src="../src/svg/notification.svg" alt="التنبيهات" />
                           <h4>التنبيهات</h4>
@@ -2083,7 +2083,7 @@ export default function Dashboard() {
                       {/* الواجبات محذوفة لمستخدم رئيس القسم */}
 
                       {/* إدارة المستخدمين */}
-                      <div className={styles.cardItem}>
+                      <div className={styles.cardItem} style={{ border: '2px solid #00897b', background: 'linear-gradient(135deg, #e0f2f1 0%, #ffffff 100%)', boxShadow: '0 4px 12px rgba(0, 137, 123, 0.18)' }}>
                         <div className={styles.cardItemContent}>
                           <img src="../src/svg/student.svg" alt="المستخدمين" />
                           <h4>إدارة المستخدمين</h4>
@@ -2095,7 +2095,7 @@ export default function Dashboard() {
                       </div>
 
                       {/* المكتبة */}
-                      <div className={styles.cardItem}>
+                      <div className={styles.cardItem} style={{ border: '2px solid #3949ab', background: 'linear-gradient(135deg, #e8eaf6 0%, #ffffff 100%)', boxShadow: '0 4px 12px rgba(57, 73, 171, 0.18)' }}>
                         <div className={styles.cardItemContent}>
                           <img src="../src/svg/book.svg" alt="المكتبة" />
                           <h4>إدارة الكتب</h4>
@@ -2107,8 +2107,8 @@ export default function Dashboard() {
                       </div>
 
                       {/* الأسئلة السابقة */}
-                      <div className={styles.cardItem}>
-                        <div className={styles.cardItemContent}>
+                      <div className={styles.cardItem} style={{ border: '2px solid #ffb300', background: 'linear-gradient(135deg, #fff8e1 0%, #ffffff 100%)', boxShadow: '0 4px 12px rgba(255, 179, 0, 0.18)' }}>
+                        <div className={styles.cardItemContent}> 
                           <img src="../src/svg/assignment.svg" alt="الأسئلة السابقة" />
                           <h4>إضافة سؤال سابق</h4>
                         </div>
