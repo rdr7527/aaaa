@@ -35,8 +35,8 @@ export async function GET(req: Request) {
   const data = readUsersFile();
   let users = data.users || [];
   
-  // If department manager, filter to only users in their department
-  if (userInfo?.role === 'department_manager' || userInfo?.role === 'teacher') {
+  // Teachers can see only their department; department managers can see all users.
+  if (userInfo?.role === 'teacher') {
     users = users.filter((u: any) => u.departmentId === userInfo.departmentId);
   }
   

@@ -1,0 +1,49 @@
+{
+  "records": [
+    {
+      "id": "1775548768172-a",
+      "date": "2026-04-07",
+      "studentId": "a",
+      "studentName": "سسس",
+      "subjectId": "1766408076209",
+      "teacherId": "ajjj",
+      "status": "present"
+    },
+    {
+      "id": "1775548768343-aaaa",
+      "date": "2026-04-07",
+      "studentId": "aaaa",
+      "studentName": "aaaa",
+      "subjectId": "1766408076209",
+      "teacherId": "ajjj",
+      "status": "absent"
+    },
+    {
+      "id": "1775548768478-12345",
+      "date": "2026-04-07",
+      "studentId": "12345",
+      "studentName": "1234",
+      "subjectId": "1766408076209",
+      "teacherId": "ajjj",
+      "status": "absent"
+    },
+    {
+      "id": "1775548768619-sss",
+      "date": "2026-04-07",
+      "studentId": "sss",
+      "studentName": "sss",
+      "subjectId": "1766408076209",
+      "teacherId": "ajjj",
+      "status": "absent"
+    },
+    {
+      "id": "1775548768834-m",
+      "date": "2026-04-07",
+      "studentId": "m",
+      "studentName": "mrwa",
+      "subjectId": "1766408076209",
+      "teacherId": "ajjj",
+      "status": "absent"
+    }
+  ]
+}

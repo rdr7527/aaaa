@@ -55,8 +55,11 @@ export default function Dashboard() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [viewStudentsSubjectId, setViewStudentsSubjectId] = useState<string | null>(null);
   const [showDeptStudentsModal, setShowDeptStudentsModal] = useState(false);
+  const [subjectAttendanceRecords, setSubjectAttendanceRecords] = useState<any[]>([]);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [selectedStudentForAbsenceDetails, setSelectedStudentForAbsenceDetails] = useState<string | null>(null);
 
-const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
+  const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   
   useEffect(() => {
     // run once on mount: fetch current user and load role-specific data
@@ -942,6 +945,28 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     }
   };
 
+  const loadSubjectAttendanceRecords = async (subjectId: string) => {
+    if (!subjectId) {
+      setSubjectAttendanceRecords([]);
+      return;
+    }
+    setAttendanceLoading(true);
+    try {
+      const res = await fetch(`/api/attendance?subjectId=${encodeURIComponent(subjectId)}`, { cache: 'no-store', credentials: 'include' });
+      if (!res.ok) {
+        setSubjectAttendanceRecords([]);
+        return;
+      }
+      const body = await res.json();
+      setSubjectAttendanceRecords(body.records || []);
+    } catch (e) {
+      console.error('فشل جلب سجلات الحضور', e);
+      setSubjectAttendanceRecords([]);
+    } finally {
+      setAttendanceLoading(false);
+    }
+  };
+
   const handleUploadGraduationProject = async () => {
     if (!gradFile) return showToast('اختر ملف PDF للرفع', 'error');
     if (gradFile.type !== 'application/pdf') return showToast('الملف يجب أن يكون PDF', 'error');
@@ -974,6 +999,10 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
     }
   };
   const [addModalType, setAddModalType] = useState<'subject' | 'video' | 'assignment' | 'student' | 'department' | 'teacher' | 'book' | 'previous_question' | null>(null);
+  const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+  const [selectedSubjectForAttendance, setSelectedSubjectForAttendance] = useState<any>(null);
+  const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
+  const [attendanceRecords, setAttendanceRecords] = useState<any>({});
 
   const [viewModalType, setViewModalType] = useState<'subjects' | 'videos' | 'assignments' | 'students' | 'departments' | 'teachers' | 'users' | 'deptSubjects' | 'graduation_projects' | 'library' | 'previous_questions' | 'view_subject_students' | null>(null);
 
@@ -1996,7 +2025,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                 <img src="/src/sh.png" alt="بوابة" style={{ height: '140px', width: '290px', marginRight: '60px' }} />
               </div>
               <div className={styles.content}>
-                {user.role === 'department_manager' ? (
+                {user.role === 'department_manager' && viewModalType !== 'view_subject_students' ? (
                   <>
                     <h3>إدارة قسمك</h3>
                     <div className={styles.cardGrid}>
@@ -2009,6 +2038,17 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                         <div className={styles.cardItemActions}>
                           <p onClick={() => setAddModalType('subject')}>إضافة مادة</p>
                           <p onClick={() => setViewModalType('subjects')}>عرض المواد ({filteredSubjects.length})</p>
+                        </div>
+                      </div>
+
+                      <div className={styles.cardItem} style={{ border: '2px solid #f44336', background: 'linear-gradient(135deg, #ffebee 0%, #fff 100%)', boxShadow: '0 4px 12px rgba(244, 67, 54, 0.15)' }}>
+                        <div className={styles.cardItemContent}>
+                          <span style={{ fontSize: '32px', marginBottom: '8px' }}>📊</span>
+                          <h4 style={{ color: '#c62828', fontWeight: 'bold' }}>إدارة الغيابات</h4>
+                        </div>
+                        <div className={styles.cardItemActions}>
+                          <p onClick={(e) => { e.stopPropagation(); setViewModalType('view_subject_students'); setViewStudentsSubjectId(null); setSubjectAttendanceRecords([]); }} style={{ color: '#c62828', fontWeight: '500', cursor: 'pointer' }}>📋 عرض غيابات الطلاب</p>
+                          <p onClick={(e) => { e.stopPropagation(); alert('إحصائيات الغيابات قيد التطوير'); }} >📈 إحصائيات الغيابات</p>
                         </div>
                       </div>
 
@@ -2081,7 +2121,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
                   </>
                 ) : (
-                  user.role === 'teacher' ? (
+                  user.role === 'teacher' && viewModalType !== 'view_subject_students' ? (
                     <>
                       <h3 style={{ color: '#2e7d32', fontSize: '24px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>👨‍🏫 إدارة المقرر</h3>
                       <div className={styles.cardGrid}>
@@ -2106,6 +2146,36 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                           <div className={styles.cardItemActions}>
                             <p onClick={(e) => { e.stopPropagation(); setViewModalType('assignments'); }} style={{ color: '#e65100', fontWeight: '500', cursor: 'pointer' }}>📋 عرض الواجبات ({assignments.filter(a => a.teacherId === user.id || subjects.find(s=>s.id===a.subjectId && s.teacherId===user.id)).length})</p>
                             <p onClick={(e) => { e.stopPropagation(); setAddModalType('assignment'); }} style={{ color: '#ff9800', fontWeight: '600', cursor: 'pointer' }}>➕ إضافة واجب جديد</p>
+                          </div>
+                        </div>
+
+                        {/* الحضور والانصراف */}
+                        <div className={styles.cardItem} style={{ border: '2px solid #673ab7', background: 'linear-gradient(135deg, #ede7f6 0%, #fff 100%)', boxShadow: '0 4px 12px rgba(103, 58, 183, 0.15)' }}>
+                          <div className={styles.cardItemContent}>
+                            <span style={{ fontSize: '32px', marginBottom: '8px' }}>⏱️</span>
+                            <h4 style={{ color: '#5e35b1', fontWeight: 'bold' }}>الحضور والانصراف</h4>
+                          </div>
+                          <div className={styles.cardItemActions}>
+                            <p onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedSubjectForAttendance(null);
+                              setAttendanceDate(new Date().toISOString().split('T')[0]);
+                              setAttendanceRecords({});
+                              setShowAttendanceModal(true);
+                            }} style={{ color: '#5e35b1', fontWeight: '500', cursor: 'pointer' }}>تسجيل الحضور</p>
+                            <p onClick={(e) => { e.stopPropagation(); setViewModalType('view_subject_students'); setViewStudentsSubjectId(null); setSubjectAttendanceRecords([]); }} style={{ color: '#673ab7', fontWeight: '600', cursor: 'pointer' }}>عرض الطلاب</p>
+                          </div>
+                        </div>
+
+                        {/* إدارة الغيابات */}
+                        <div className={styles.cardItem} style={{ border: '2px solid #f44336', background: 'linear-gradient(135deg, #ffebee 0%, #fff 100%)', boxShadow: '0 4px 12px rgba(244, 67, 54, 0.15)' }}>
+                          <div className={styles.cardItemContent}>
+                            <span style={{ fontSize: '32px', marginBottom: '8px' }}>📊</span>
+                            <h4 style={{ color: '#c62828', fontWeight: 'bold' }}>إدارة الغيابات</h4>
+                          </div>
+                          <div className={styles.cardItemActions}>
+                            <p onClick={(e) => { e.stopPropagation(); setViewModalType('view_subject_students'); setViewStudentsSubjectId(null); setSubjectAttendanceRecords([]); }} style={{ color: '#c62828', fontWeight: '500', cursor: 'pointer' }}>📋 عرض غيابات الطلاب</p>
+                            <p onClick={(e) => { e.stopPropagation(); alert('إحصائيات الغيابات قيد التطوير'); }} style={{ color: '#f44336', fontWeight: '600', cursor: 'pointer' }}>📈 إحصائيات الغيابات</p>
                           </div>
                         </div>
 
@@ -2309,22 +2379,22 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                           )}
                         </div>
                       </div>
-                    ) : viewModalType === 'view_subject_students' && user.role === 'teacher' ? (
+                    ) : viewModalType === 'view_subject_students' && (user.role === 'teacher' || user.role === 'department_manager') ? (
                       <div style={{ padding: '20px', direction: 'rtl' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                           <h2 style={{ color: '#1565c0', margin: 0 }}>👥 عرض طلاب المادة</h2>
-                          <button onClick={() => { setViewModalType(null); setViewStudentsSubjectId(null); }} style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #ccc', background: '#fff', cursor: 'pointer', fontWeight: 'bold' }}>إغلاق</button>
+                          <button onClick={() => { setViewModalType(null); setViewStudentsSubjectId(null); setSubjectAttendanceRecords([]); }} style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #ccc', background: '#fff', cursor: 'pointer', fontWeight: 'bold' }}>إغلاق</button>
                         </div>
 
                         {!viewStudentsSubjectId ? (
                           <div>
                             <p style={{ color: '#666', marginBottom: '20px', fontSize: '16px' }}>اختر مادة لعرض الطلاب المسجلين فيها:</p>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '15px' }}>
-                              {subjects.filter(s => s.teacherId === user.id).length === 0 ? (
-                                <p style={{ color: '#999' }}>لا توجد مواد لك</p>
+                              {((user.role === 'teacher' ? subjects.filter(s => s.teacherId === user.id) : subjects)).length === 0 ? (
+                                <p style={{ color: '#999' }}>{user.role === 'teacher' ? 'لا توجد مواد لك' : 'لا توجد مواد متاحة'}</p>
                               ) : (
-                                subjects.filter(s => s.teacherId === user.id).map(subject => (
-                                  <div key={subject.id} onClick={() => setViewStudentsSubjectId(subject.id)} style={{
+                                (user.role === 'teacher' ? subjects.filter(s => s.teacherId === user.id) : subjects).map(subject => (
+                                  <div key={subject.id} onClick={() => { setViewStudentsSubjectId(subject.id); setSelectedStudentForAbsenceDetails(null); loadSubjectAttendanceRecords(subject.id); }} style={{
                                     border: '2px solid #2196f3',
                                     padding: '15px',
                                     borderRadius: '10px',
@@ -2353,7 +2423,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                         ) : (
                           <div>
                             <div style={{ marginBottom: '20px' }}>
-                              <button onClick={() => setViewStudentsSubjectId(null)} style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #2196f3', background: '#e3f2fd', color: '#1565c0', cursor: 'pointer', fontWeight: 'bold' }}>← العودة للمواد</button>
+                              <button onClick={() => { setViewStudentsSubjectId(null); setSubjectAttendanceRecords([]); setSelectedStudentForAbsenceDetails(null); }} style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #2196f3', background: '#e3f2fd', color: '#1565c0', cursor: 'pointer', fontWeight: 'bold' }}>← العودة للمواد</button>
                             </div>
                             <div style={{ marginBottom: '20px' }}>
                               <h3 style={{ color: '#1565c0', margin: '0 0 15px 0' }}>📋 المادة: {subjects.find(s => s.id === viewStudentsSubjectId)?.name}</h3>
@@ -2365,33 +2435,87 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                                   return <p style={{ color: '#999', fontSize: '16px', textAlign: 'center', padding: '40px 20px' }}>لا يوجد طلاب مسجلون في هذه المادة</p>;
                                 }
                                 
+                                const selectedStudent = selectedStudentForAbsenceDetails ? users.find(u => String(u.id) === String(selectedStudentForAbsenceDetails)) : null;
+                                const selectedStudentAbsences = selectedStudentForAbsenceDetails ? subjectAttendanceRecords.filter((r: any) => String(r.studentId) === String(selectedStudentForAbsenceDetails) && r.status === 'absent') : [];
+                                if (selectedStudentForAbsenceDetails) {
+                                  return (
+                                    <div style={{ padding: '20px', background: '#f9f9ff', borderRadius: 12, border: '1px solid #d1d8e0' }}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+                                        <div>
+                                          <h3 style={{ margin: 0, color: '#1565c0' }}>تفاصيل غياب الطالب</h3>
+                                          <p style={{ margin: '6px 0 0 0', color: '#555' }}>{selectedStudent?.name || selectedStudentForAbsenceDetails} - المعرف: {selectedStudentForAbsenceDetails}</p>
+                                        </div>
+                                        <button onClick={() => setSelectedStudentForAbsenceDetails(null)} style={{ padding: '8px 14px', borderRadius: 6, border: '1px solid #2196f3', background: '#e3f2fd', color: '#1565c0', cursor: 'pointer', fontWeight: 'bold' }}>← رجوع للطلاب</button>
+                                      </div>
+                                      {selectedStudentAbsences.length === 0 ? (
+                                        <p style={{ color: '#4caf50', fontSize: 15 }}>لا توجد غيابات مسجلة لهذا الطالب.</p>
+                                      ) : (
+                                        <div style={{ display: 'grid', gap: 10 }}>
+                                          <p style={{ margin: 0, color: '#d32f2f', fontWeight: 'bold' }}>عدد الغيابات: {selectedStudentAbsences.length}</p>
+                                          {selectedStudentAbsences.map((rec: any, idx: number) => (
+                                            <div key={`${selectedStudentForAbsenceDetails}-${idx}`} style={{ background: '#fff5f5', border: '1px solid #ffcdd2', borderRadius: 10, padding: '12px 14px' }}>
+                                              <p style={{ margin: 0, color: '#c62828', fontWeight: 'bold' }}>تاريخ الغياب:</p>
+                                              <p style={{ margin: '6px 0 0 0', color: '#555' }}>{rec.date}</p>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                }
                                 return (
                                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '15px' }}>
-                                    {enrolledStudents.map((studentId: string) => {
-                                      const student = users.find(u => u.id === studentId);
-                                      return (
-                                        <div key={studentId} style={{
-                                          border: '2px solid #4caf50',
-                                          padding: '15px',
-                                          borderRadius: '10px',
-                                          background: 'linear-gradient(135deg, #f1f8f6 0%, #fff 100%)',
-                                          boxShadow: '0 2px 8px rgba(76, 175, 80, 0.15)'
-                                        }}>
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                                            <span style={{ fontSize: '24px' }}>👤</span>
-                                            <div>
-                                              <p style={{ color: '#2e7d32', fontWeight: 'bold', margin: '0', fontSize: '16px' }}>{student?.name || studentId}</p>
-                                              <p style={{ color: '#666', margin: '0', fontSize: '13px' }}>المعرف: {studentId}</p>
+                                    {attendanceLoading ? (
+                                      <div style={{ gridColumn: '1/-1', color: '#555', textAlign: 'center', padding: '20px' }}>جاري تحميل سجلات الحضور...</div>
+                                    ) : (
+                                      enrolledStudents.map((studentId: string) => {
+                                        const student = users.find(u => String(u.id) === String(studentId));
+                                        const studentAbsences = subjectAttendanceRecords.filter((r: any) => String(r.studentId) === String(studentId) && r.status === 'absent');
+                                        return (
+                                          <div key={studentId} onClick={() => setSelectedStudentForAbsenceDetails(studentId)} style={{
+                                            border: '2px solid #4caf50',
+                                            padding: '15px',
+                                            borderRadius: '10px',
+                                            background: 'linear-gradient(135deg, #f1f8f6 0%, #fff 100%)',
+                                            boxShadow: '0 2px 8px rgba(76, 175, 80, 0.15)',
+                                            cursor: 'pointer',
+                                            transition: 'transform 0.2s, box-shadow 0.2s'
+                                          }}
+                                          onMouseEnter={(e) => {
+                                            e.currentTarget.style.transform = 'translateY(-3px)';
+                                            e.currentTarget.style.boxShadow = '0 6px 20px rgba(76, 175, 80, 0.2)';
+                                          }}
+                                          onMouseLeave={(e) => {
+                                            e.currentTarget.style.transform = 'translateY(0)';
+                                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(76, 175, 80, 0.15)';
+                                          }}
+                                          >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                                              <span style={{ fontSize: '24px' }}>👤</span>
+                                              <div>
+                                                <p style={{ color: '#2e7d32', fontWeight: 'bold', margin: '0', fontSize: '16px' }}>{student?.name || studentId}</p>
+                                                <p style={{ color: '#666', margin: '0', fontSize: '13px' }}>المعرف: {studentId}</p>
+                                              </div>
+                                            </div>
+                                            {student?.departmentId && (
+                                              <p style={{ color: '#666', fontSize: '13px', margin: '8px 0 0 0' }}>
+                                                🏛️ القسم: {departments.find(d => d.id === student.departmentId)?.name || 'غير محدد'}
+                                              </p>
+                                            )}
+                                            <div style={{ marginTop: '12px' }}>
+                                              {studentAbsences.length === 0 ? (
+                                                <p style={{ color: '#4caf50', margin: '0', fontSize: '13px' }}>لا توجد غيابات مسجلة لهذا الطالب.</p>
+                                              ) : (
+                                                <>
+                                                  <p style={{ color: '#d32f2f', margin: '0 0 8px 0', fontSize: '13px', fontWeight: 'bold' }}>غيابات ({studentAbsences.length})</p>
+                                                  <p style={{ margin: 0, color: '#555', fontSize: '13px' }}>اضغط على الطالب لعرض التواريخ كاملة.</p>
+                                                </>
+                                              )}
                                             </div>
                                           </div>
-                                          {student?.departmentId && (
-                                            <p style={{ color: '#666', fontSize: '13px', margin: '8px 0 0 0' }}>
-                                              🏛️ القسم: {departments.find(d => d.id === student.departmentId)?.name || 'غير محدد'}
-                                            </p>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
+                                        );
+                                      })
+                                    )}
                                   </div>
                                 );
                               })()}
@@ -3072,7 +3196,7 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
         </div>
       )}
 
-      {viewModalType && user?.role !== 'user' && (
+      {viewModalType && user?.role !== 'user' && viewModalType !== 'view_subject_students' && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
           <div style={{ background: 'white', padding: '20px', maxWidth: '800px', width: '90%', maxHeight: '80vh', overflow: 'auto', borderRadius: 8, position: 'relative', direction: 'rtl' }}>
             <button onClick={() => setViewModalType(null)} style={{ position: 'sticky', top: 0, left: 8, fontSize: 20, border: 'none', background: 'white', cursor: 'pointer', zIndex: 10, padding: '4px' }}>✕</button>
@@ -3768,6 +3892,101 @@ const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
                 <button onClick={() => { setGradFile(null); setShowGradModal(false); setGradTitle(''); setGradDeptId(null); }} style={{ padding: '8px 12px', borderRadius: 6 }}>إلغاء</button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showAttendanceModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
+          <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '28px', maxWidth: '760px', width: '95%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 4px 18px rgba(0,0,0,0.12)', direction: 'rtl' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ margin: 0 }}>تسجيل الحضور والانصراف</h2>
+              <button onClick={() => { setShowAttendanceModal(false); setSelectedSubjectForAttendance(null); setAttendanceRecords({}); }} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}>✕</button>
+            </div>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>المادة</label>
+              <select value={selectedSubjectForAttendance?.id || ''} onChange={(e) => {
+                const selected = subjects.find(s => String(s.id) === String(e.target.value));
+                setSelectedSubjectForAttendance(selected || null);
+                setAttendanceRecords({});
+              }} style={{ width: '100%', padding: '10px', borderRadius: 6, border: '1px solid #ccc' }}>
+                <option value="">-- اختر مادة --</option>
+                {subjects.filter(s => s.teacherId === user?.id).map(subject => (
+                  <option key={subject.id} value={subject.id}>{subject.name}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>التاريخ</label>
+              <input type="date" value={attendanceDate} onChange={(e) => setAttendanceDate(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: 6, border: '1px solid #ccc' }} />
+            </div>
+            {selectedSubjectForAttendance ? (
+              <>
+                <h3 style={{ marginBottom: '16px' }}>الطلاب المسجلون في {selectedSubjectForAttendance.name}</h3>
+                {Array.isArray(selectedSubjectForAttendance.students) && selectedSubjectForAttendance.students.length > 0 ? (
+                  <div style={{ display: 'grid', gap: '12px' }}>
+                    {selectedSubjectForAttendance.students.map((studentId: string) => {
+                      const student = users.find(u => String(u.id) === String(studentId));
+                      return (
+                        <div key={studentId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderRadius: 8, background: '#f5f5f5', border: '1px solid #e0e0e0' }}>
+                          <div>
+                            <div style={{ fontWeight: 'bold', color: '#212121' }}>{student?.name || studentId}</div>
+                            <div style={{ fontSize: 13, color: '#616161' }}>المعرف: {studentId}</div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '10px' }}>
+                            <button onClick={() => setAttendanceRecords({ ...attendanceRecords, [studentId]: 'present' })} style={{ padding: '8px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', backgroundColor: attendanceRecords[studentId] === 'present' ? '#4caf50' : '#e0e0e0', color: attendanceRecords[studentId] === 'present' ? 'white' : '#424242' }}>حاضر</button>
+                            <button onClick={() => setAttendanceRecords({ ...attendanceRecords, [studentId]: 'absent' })} style={{ padding: '8px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', backgroundColor: attendanceRecords[studentId] === 'absent' ? '#f44336' : '#e0e0e0', color: attendanceRecords[studentId] === 'absent' ? 'white' : '#424242' }}>غائب</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p style={{ color: '#757575', padding: '20px 0' }}>لا يوجد طلاب مسجلون في هذه المادة.</p>
+                )}
+                <div style={{ display: 'flex', gap: '10px', marginTop: '24px', flexWrap: 'wrap' }}>
+                  <button onClick={async () => {
+                    try {
+                      const subject = selectedSubjectForAttendance;
+                      if (!subject) return;
+                      const studentList = Array.isArray(subject.students) ? subject.students : [];
+                      for (const studentId of studentList) {
+                        const student = users.find(u => String(u.id) === String(studentId));
+                        const res = await fetch('/api/attendance', {
+                          method: 'POST',
+                          credentials: 'include',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            date: attendanceDate,
+                            studentId,
+                            studentName: student?.name || studentId,
+                            subjectId: subject.id,
+                            status: attendanceRecords[studentId] || 'absent'
+                          })
+                        });
+                        if (!res.ok) {
+                          const errBody = await res.json().catch(() => null);
+                          console.error('Attendance save failed', studentId, res.status, errBody);
+                        }
+                      }
+                      if (subject.id) {
+                        await loadSubjectAttendanceRecords(subject.id);
+                      }
+                      alert('تم حفظ الحضور بنجاح');
+                      setShowAttendanceModal(false);
+                      setSelectedSubjectForAttendance(null);
+                      setAttendanceRecords({});
+                    } catch (error) {
+                      console.error(error);
+                      alert('حدث خطأ أثناء حفظ الحضور');
+                    }
+                  }} style={{ flex: 1, minWidth: 140, padding: '12px 16px', borderRadius: 8, border: 'none', backgroundColor: '#4caf50', color: 'white', cursor: 'pointer', fontWeight: 'bold' }}>حفظ الحضور</button>
+                  <button onClick={() => { setShowAttendanceModal(false); setSelectedSubjectForAttendance(null); setAttendanceRecords({}); }} style={{ flex: 1, minWidth: 140, padding: '12px 16px', borderRadius: 8, border: 'none', backgroundColor: '#9e9e9e', color: 'white', cursor: 'pointer', fontWeight: 'bold' }}>إلغاء</button>
+                </div>
+              </>
+            ) : (
+              <p style={{ color: '#555', fontSize: 15 }}>اختر مادة من القائمة أعلاه لبدء تسجيل الحضور.</p>
+            )}
           </div>
         </div>
       )}
