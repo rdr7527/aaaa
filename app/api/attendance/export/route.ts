@@ -18,6 +18,23 @@ function getUserInfo(req: any) {
   }
 }
 
+function getSubjectNameById(subjectId: string): string {
+  try {
+    const data = readUsersFile();
+    // Search through all departments for the subject
+    for (const dept of (data.departments || [])) {
+      for (const subject of (dept.subjects || [])) {
+        if (String(subject.id) === String(subjectId)) {
+          return subject.name || subjectId;
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Failed to read subjects:', err);
+  }
+  return subjectId;
+}
+
 export async function GET(req: Request) {
   try {
     const userInfo = getUserInfo(req);
@@ -54,7 +71,7 @@ export async function GET(req: Request) {
       'اسم الطالب': record.studentName,
       'التاريخ': record.date,
       'الوقت': record.time || '-',
-      'المادة': record.subjectId,
+      'المادة': getSubjectNameById(record.subjectId),
       'الحالة': record.status === 'present' ? 'حاضر ✓' : 'غائب ✗',
       'المعلم': record.teacherId,
     }));
