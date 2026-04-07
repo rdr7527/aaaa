@@ -967,6 +967,44 @@ export default function Dashboard() {
     }
   };
 
+  const handleExportAttendanceToExcel = async() => {
+    if (!viewStudentsSubjectId) {
+      showToast('يرجى اختيار مادة أولاً', 'error');
+      return;
+    }
+
+    setIsExportingAttendance(true);
+    try {
+      const url = new URL('/api/attendance/export', window.location.origin);
+      url.searchParams.append('subjectId', viewStudentsSubjectId);
+      if (exportAttendanceDate) {
+        url.searchParams.append('date', exportAttendanceDate);
+      }
+      
+      const response = await fetch(url.toString(), { credentials: 'include' });
+      if (!response.ok) {
+        showToast('فشل تحميل ملف الغيابات', 'error');
+        return;
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `attendance_${viewStudentsSubjectId}_${exportAttendanceDate || new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+      showToast('تم تحميل ملف الغيابات بنجاح', 'success');
+    } catch(err) {
+      console.error('فشل التحميل:', err);
+      showToast('حدث خطأ أثناء تحميل الملف', 'error');
+    } finally {
+      setIsExportingAttendance(false);
+    }
+  };
+
   const handleUploadGraduationProject = async () => {
     if (!gradFile) return showToast('اختر ملف PDF للرفع', 'error');
     if (gradFile.type !== 'application/pdf') return showToast('الملف يجب أن يكون PDF', 'error');
@@ -1002,7 +1040,10 @@ export default function Dashboard() {
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [selectedSubjectForAttendance, setSelectedSubjectForAttendance] = useState<any>(null);
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
+  const [attendanceTime, setAttendanceTime] = useState(new Date().toTimeString().slice(0, 5));
   const [attendanceRecords, setAttendanceRecords] = useState<any>({});
+  const [isExportingAttendance, setIsExportingAttendance] = useState(false);
+  const [exportAttendanceDate, setExportAttendanceDate] = useState<string>('');
 
   const [viewModalType, setViewModalType] = useState<'subjects' | 'videos' | 'assignments' | 'students' | 'departments' | 'teachers' | 'users' | 'deptSubjects' | 'graduation_projects' | 'library' | 'previous_questions' | 'view_subject_students' | null>(null);
 
@@ -2422,8 +2463,15 @@ export default function Dashboard() {
                           </div>
                         ) : (
                           <div>
-                            <div style={{ marginBottom: '20px' }}>
+                            <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                               <button onClick={() => { setViewStudentsSubjectId(null); setSubjectAttendanceRecords([]); setSelectedStudentForAbsenceDetails(null); }} style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #2196f3', background: '#e3f2fd', color: '#1565c0', cursor: 'pointer', fontWeight: 'bold' }}>← العودة للمواد</button>
+                              <input 
+                                type="date" 
+                                value={exportAttendanceDate} 
+                                onChange={(e) => setExportAttendanceDate(e.target.value)}
+                                style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #999', fontSize: '14px', fontFamily: 'inherit' }}
+                              />
+                              <button onClick={handleExportAttendanceToExcel} disabled={isExportingAttendance} style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #4caf50', background: isExportingAttendance ? '#d4edda99' : '#d4edda', color: '#2e7d32', cursor: isExportingAttendance ? 'not-allowed' : 'pointer', fontWeight: 'bold', opacity: isExportingAttendance ? 0.6 : 1 }}>📥 تحميل Excel</button>
                             </div>
                             <div style={{ marginBottom: '20px' }}>
                               <h3 style={{ color: '#1565c0', margin: '0 0 15px 0' }}>📋 المادة: {subjects.find(s => s.id === viewStudentsSubjectId)?.name}</h3>
@@ -3901,7 +3949,7 @@ export default function Dashboard() {
           <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '28px', maxWidth: '760px', width: '95%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 4px 18px rgba(0,0,0,0.12)', direction: 'rtl' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h2 style={{ margin: 0 }}>تسجيل الحضور والانصراف</h2>
-              <button onClick={() => { setShowAttendanceModal(false); setSelectedSubjectForAttendance(null); setAttendanceRecords({}); }} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}>✕</button>
+              <button onClick={() => { setShowAttendanceModal(false); setSelectedSubjectForAttendance(null); setAttendanceRecords({}); setAttendanceTime(new Date().toTimeString().slice(0, 5)); }} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}>✕</button>
             </div>
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>المادة</label>
@@ -3909,6 +3957,7 @@ export default function Dashboard() {
                 const selected = subjects.find(s => String(s.id) === String(e.target.value));
                 setSelectedSubjectForAttendance(selected || null);
                 setAttendanceRecords({});
+                setAttendanceTime(new Date().toTimeString().slice(0, 5));
               }} style={{ width: '100%', padding: '10px', borderRadius: 6, border: '1px solid #ccc' }}>
                 <option value="">-- اختر مادة --</option>
                 {subjects.filter(s => s.teacherId === user?.id).map(subject => (
@@ -3919,6 +3968,10 @@ export default function Dashboard() {
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>التاريخ</label>
               <input type="date" value={attendanceDate} onChange={(e) => setAttendanceDate(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: 6, border: '1px solid #ccc' }} />
+            </div>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>الوقت</label>
+              <input type="time" value={attendanceTime} disabled style={{ width: '100%', padding: '10px', borderRadius: 6, border: '1px solid #ccc', backgroundColor: '#f5f5f5', color: '#999' }} />
             </div>
             {selectedSubjectForAttendance ? (
               <>
@@ -3950,6 +4003,7 @@ export default function Dashboard() {
                       const subject = selectedSubjectForAttendance;
                       if (!subject) return;
                       const studentList = Array.isArray(subject.students) ? subject.students : [];
+                      const currentTime = new Date().toTimeString().slice(0, 5);
                       for (const studentId of studentList) {
                         const student = users.find(u => String(u.id) === String(studentId));
                         const res = await fetch('/api/attendance', {
@@ -3958,6 +4012,7 @@ export default function Dashboard() {
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
                             date: attendanceDate,
+                            time: currentTime,
                             studentId,
                             studentName: student?.name || studentId,
                             subjectId: subject.id,
@@ -3976,12 +4031,13 @@ export default function Dashboard() {
                       setShowAttendanceModal(false);
                       setSelectedSubjectForAttendance(null);
                       setAttendanceRecords({});
+                      setAttendanceTime(new Date().toTimeString().slice(0, 5));
                     } catch (error) {
                       console.error(error);
                       alert('حدث خطأ أثناء حفظ الحضور');
                     }
                   }} style={{ flex: 1, minWidth: 140, padding: '12px 16px', borderRadius: 8, border: 'none', backgroundColor: '#4caf50', color: 'white', cursor: 'pointer', fontWeight: 'bold' }}>حفظ الحضور</button>
-                  <button onClick={() => { setShowAttendanceModal(false); setSelectedSubjectForAttendance(null); setAttendanceRecords({}); }} style={{ flex: 1, minWidth: 140, padding: '12px 16px', borderRadius: 8, border: 'none', backgroundColor: '#9e9e9e', color: 'white', cursor: 'pointer', fontWeight: 'bold' }}>إلغاء</button>
+                  <button onClick={() => { setShowAttendanceModal(false); setSelectedSubjectForAttendance(null); setAttendanceRecords({}); setAttendanceTime(new Date().toTimeString().slice(0, 5)); }} style={{ flex: 1, minWidth: 140, padding: '12px 16px', borderRadius: 8, border: 'none', backgroundColor: '#9e9e9e', color: 'white', cursor: 'pointer', fontWeight: 'bold' }}>إلغاء</button>
                 </div>
               </>
             ) : (

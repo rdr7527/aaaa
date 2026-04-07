@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { date, studentId, studentName, subjectId, status } = body;
+    const { date, time, studentId, studentName, subjectId, status } = body;
 
     if (!date || !studentId || !subjectId || !status) {
       return NextResponse.json({ ok: false, error: 'Missing fields' }, { status: 400 });
@@ -40,11 +40,13 @@ export async function POST(req: Request) {
     if (existingIndex >= 0) {
       // Update existing record
       data.records[existingIndex].status = status;
+      data.records[existingIndex].time = time || '';
     } else {
       // Add new record
       const record = {
         id: `${Date.now()}-${studentId}`,
         date,
+        time: time || '',
         studentId,
         studentName,
         subjectId,

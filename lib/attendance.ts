@@ -8,6 +8,7 @@ const DATA_FILE = process.env.DATA_FILE_PATH || (process.env.VERCEL ? path.join(
 export interface AttendanceRecord {
   id: string;
   date: string;
+  time?: string;
   studentId: string;
   studentName: string;
   subjectId: string;
