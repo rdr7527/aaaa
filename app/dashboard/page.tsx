@@ -11,6 +11,283 @@ function formatAnswer(answer: any, answerType?: string): string {
   return String(answer);
 }
 
+function TutorialsManagement({ tutorials, onUpdate }: any) {
+  const [selectedType, setSelectedType] = useState('student');
+  const [video, setVideo] = useState('');
+  const [title, setTitle] = useState('');
+  const [steps, setSteps] = useState<any[]>([]);
+  const [tips, setTips] = useState<string[]>([]);
+  const [videoFiles, setVideoFiles] = useState<string[]>([]);
+  const [selectedVideoFile, setSelectedVideoFile] = useState('');
+  const [fileToUpload, setFileToUpload] = useState<File | null>(null);
+  const [uploadMessage, setUploadMessage] = useState('');
+  const [uploadError, setUploadError] = useState('');
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (tutorials[selectedType]) {
+      setVideo(tutorials[selectedType].video || '');
+      setTitle(tutorials[selectedType].title || '');
+      setSteps(tutorials[selectedType].steps || []);
+      setTips(tutorials[selectedType].tips || []);
+      setSelectedVideoFile(tutorials[selectedType].video || '');
+    }
+  }, [selectedType, tutorials]);
+
+  useEffect(() => {
+    loadVideoFiles();
+  }, []);
+
+  const loadVideoFiles = async () => {
+    try {
+      const res = await fetch('/api/tutorials/videos');
+      if (!res.ok) return;
+      const body = await res.json();
+      setVideoFiles(body.files || []);
+    } catch (err) {
+      console.error('Failed to load video files', err);
+    }
+  };
+
+  const chooseVideoFile = () => {
+    if (selectedVideoFile) {
+      setVideo(selectedVideoFile);
+      setUploadMessage(`تم اختيار الفيديو ${selectedVideoFile}`);
+      setUploadError('');
+    }
+  };
+
+  const uploadVideoFile = async () => {
+    if (!fileToUpload) {
+      setUploadError('الرجاء اختيار ملف فيديو أولاً');
+      setUploadMessage('');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', fileToUpload);
+
+    try {
+      setUploadError('');
+      setUploadMessage('جاري تحميل الفيديو...');
+      const res = await fetch('/api/tutorials/videos', {
+        method: 'POST',
+        body: formData,
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setUploadError(body.error || 'فشل رفع الفيديو');
+        setUploadMessage('');
+        return;
+      }
+      setUploadMessage('تم رفع الفيديو بنجاح');
+      setSelectedVideoFile(body.name);
+      setVideo(body.name);
+      setFileToUpload(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      await loadVideoFiles();
+    } catch (err) {
+      console.error(err);
+      setUploadError('حدث خطأ أثناء رفع الفيديو');
+      setUploadMessage('');
+    }
+  };
+
+  const deleteVideoFile = async (fileName: string) => {
+    if (!fileName) return;
+    if (!confirm(`هل تريد حذف الفيديو ${fileName}?`)) return;
+    try {
+      const res = await fetch(`/api/tutorials/videos?name=${encodeURIComponent(fileName)}`, {
+        method: 'DELETE',
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setUploadError(body.error || 'فشل حذف الفيديو');
+        return;
+      }
+      setUploadMessage(`تم حذف الفيديو ${fileName}`);
+      if (video === fileName) setVideo('');
+      if (selectedVideoFile === fileName) setSelectedVideoFile('');
+      await loadVideoFiles();
+    } catch (err) {
+      console.error(err);
+      setUploadError('حدث خطأ أثناء حذف الفيديو');
+    }
+  };
+
+
+  const addStep = () => {
+    setSteps([...steps, { title: '', content: '' }]);
+  };
+
+  const updateStep = (index: number, field: string, value: string) => {
+    const newSteps = [...steps];
+    newSteps[index][field] = value;
+    setSteps(newSteps);
+  };
+
+  const removeStep = (index: number) => {
+    setSteps(steps.filter((_, i) => i !== index));
+  };
+
+  const addTip = () => {
+    setTips([...tips, '']);
+  };
+
+  const updateTip = (index: number, value: string) => {
+    const newTips = [...tips];
+    newTips[index] = value;
+    setTips(newTips);
+  };
+
+  const removeTip = (index: number) => {
+    setTips(tips.filter((_, i) => i !== index));
+  };
+
+  const save = () => {
+    onUpdate(selectedType, { video, title, steps, tips });
+  };
+
+  return (
+    <div id="tutorials-management">
+      <h3 style={{ marginBottom: '10px' }}>ضبط الدليل الإرشادي</h3>
+      <div style={{ marginBottom: '20px', padding: '16px 18px', borderRadius: '16px', background: '#f1f5fb', border: '1px solid #d8e4f5' }}>
+        <p style={{ margin: 0, lineHeight: '1.7', color: '#2e4a72' }}>اختر نوع الدليل ثم حدد فيديو من الملفات الموجودة أو ارفع فيديو جديد. الحفظ يطبق التغييرات على الدليل الحالي.</p>
+      </div>
+
+      <div style={{ marginBottom: '20px' }}>
+        <select value={selectedType} onChange={e => setSelectedType(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #ccc', background: 'white', fontSize: '14px' }}>
+          <option value="student">دليل الطالب</option>
+          <option value="teacher">دليل الأستاذ</option>
+          <option value="general">الدليل العام</option>
+        </select>
+      </div>
+
+      <div style={{ marginBottom: '20px', padding: '18px', borderRadius: '12px', background: '#ffffff', border: '1px solid #e6e9ef' }}>
+        <h4 style={{ margin: '0 0 12px 0', color: '#1e3e72' }}>الفيديو الحالي</h4>
+        <p style={{ margin: 0, color: '#505f7f', fontSize: '14px' }}>{video ? video : 'لم يتم تعيين فيديو بعد. اختر فيديو من القائمة أو ارفع فيديو جديد.'}</p>
+      </div>
+
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          {/* قسم الاختيار */}
+          <div style={{ padding: '18px', borderRadius: '12px', background: '#e3f2fd', border: '2px solid #1976d2' }}>
+            <h4 style={{ margin: '0 0 14px 0', color: '#1565c0', display: 'flex', alignItems: 'center', gap: '8px' }}>📁 اختيار من الملفات</h4>
+            <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#555' }}>اختر فيديو من الملفات الموجودة:</p>
+            <div style={{ marginBottom: '12px' }}>
+              <select 
+                value={selectedVideoFile} 
+                onChange={e => setSelectedVideoFile(e.target.value)}
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #90caf9', background: 'white', fontSize: '14px', cursor: 'pointer' }}
+              >
+                <option value="">-- اختر فيديو --</option>
+                {videoFiles.length === 0 ? (
+                  <option disabled>لا توجد ملفات متاحة</option>
+                ) : (
+                  videoFiles.map((file) => (
+                    <option key={file} value={file}>{file}</option>
+                  ))
+                )}
+              </select>
+            </div>
+            {videoFiles.length === 0 && <p style={{ margin: '0', fontSize: '12px', color: '#d32f2f' }}>⚠️ لا توجد ملفات فيديو متاحة</p>}
+            {selectedVideoFile && <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#1565c0', fontWeight: 'bold' }}>✓ تم التحديد: {selectedVideoFile}</p>}
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+              <button onClick={chooseVideoFile} disabled={!selectedVideoFile} style={{ flex: 1, padding: '10px 12px', background: selectedVideoFile ? '#1565c0' : '#ccc', color: 'white', border: 'none', borderRadius: '7px', cursor: selectedVideoFile ? 'pointer' : 'not-allowed', fontWeight: '600' }}>✓ تعيين</button>
+              <button onClick={() => { setSelectedVideoFile(''); setVideo(''); setUploadMessage(''); }} style={{ flex: 1, padding: '10px 12px', background: '#f5f5f5', color: '#666', border: '1px solid #ddd', borderRadius: '7px', cursor: 'pointer', fontWeight: '600' }}>مسح</button>
+            </div>
+          </div>
+
+          {/* قسم الرفع */}
+          <div style={{ padding: '18px', borderRadius: '12px', background: '#e8f5e9', border: '2px solid #4caf50' }}>
+            <h4 style={{ margin: '0 0 14px 0', color: '#2e7d32', display: 'flex', alignItems: 'center', gap: '8px' }}>⬆️ رفع فيديو جديد</h4>
+            <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#555' }}>ارفع ملف فيديو جديد (mp4, webm, ogg):</p>
+            <div style={{
+              padding: '20px',
+              borderRadius: '8px',
+              border: '2px dashed #4caf50',
+              background: '#f1f8f6',
+              textAlign: 'center',
+              marginBottom: '12px',
+              cursor: 'pointer'
+            }}>
+              <input 
+                ref={fileInputRef}
+                type="file" 
+                accept="video/*"
+                onChange={e => { 
+                  if (e.target.files?.[0]) {
+                    setFileToUpload(e.target.files[0]);
+                    setUploadMessage(`تم اختيار: ${e.target.files[0].name}`);
+                  }
+                }}
+                style={{ width: '100%', cursor: 'pointer' }}
+              />
+              {fileToUpload && <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#2e7d32', fontWeight: 'bold' }}>✓ {fileToUpload.name}</p>}
+            </div>
+            <button onClick={uploadVideoFile} disabled={!fileToUpload} style={{ width: '100%', padding: '11px 16px', background: fileToUpload ? '#4caf50' : '#ccc', color: 'white', border: 'none', borderRadius: '7px', cursor: fileToUpload ? 'pointer' : 'not-allowed', fontWeight: '600', fontSize: '15px' }}>🚀 رفع الفيديو</button>
+            {uploadMessage && <p style={{ marginTop: '12px', padding: '10px', background: '#c8e6c9', color: '#1b5e20', borderRadius: '6px', fontSize: '13px', margin: '12px 0 0 0' }}>✓ {uploadMessage}</p>}
+            {uploadError && <p style={{ marginTop: '12px', padding: '10px', background: '#ffcdd2', color: '#b71c1c', borderRadius: '6px', fontSize: '13px', margin: '12px 0 0 0' }}>❌ {uploadError}</p>}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: '20px' }}>
+        <label>عنوان الدليل:</label>
+        <input 
+          type="text"
+          value={title} 
+          onChange={e => setTitle(e.target.value)}
+          style={{ width: '100%', padding: '8px', marginTop: '5px' }}
+        />
+      </div>
+
+      <div style={{ marginBottom: '20px' }}>
+        <h4>الخطوات:</h4>
+        {steps.map((step, index) => (
+          <div key={index} style={{ border: '1px solid #ccc', padding: '10px', margin: '10px 0', background: '#f9f9f9' }}>
+            <input 
+              placeholder="عنوان الخطوة" 
+              value={step.title} 
+              onChange={e => updateStep(index, 'title', e.target.value)}
+              style={{ width: '100%', marginBottom: '5px', padding: '5px' }}
+            />
+            <textarea 
+              placeholder="محتوى الخطوة (يمكن استخدام HTML)" 
+              value={step.content} 
+              onChange={e => updateStep(index, 'content', e.target.value)}
+              rows={4}
+              style={{ width: '100%', padding: '5px' }}
+            />
+            <button onClick={() => removeStep(index)} style={{ marginTop: '5px', background: '#ff4444', color: 'white', border: 'none', padding: '5px 10px' }}>حذف الخطوة</button>
+          </div>
+        ))}
+        <button onClick={addStep} style={{ background: '#4CAF50', color: 'white', border: 'none', padding: '8px 15px' }}>إضافة خطوة</button>
+      </div>
+
+      <div style={{ marginBottom: '20px' }}>
+        <h4>نصائح:</h4>
+        {tips.map((tip, index) => (
+          <div key={index} style={{ display: 'flex', gap: '10px', margin: '5px 0' }}>
+            <input 
+              placeholder="نصيحة" 
+              value={tip} 
+              onChange={e => updateTip(index, e.target.value)}
+              style={{ flex: 1, padding: '5px' }}
+            />
+            <button onClick={() => removeTip(index)} style={{ background: '#ff4444', color: 'white', border: 'none', padding: '5px 10px' }}>حذف</button>
+          </div>
+        ))}
+        <button onClick={addTip} style={{ background: '#4CAF50', color: 'white', border: 'none', padding: '8px 15px' }}>إضافة نصيحة</button>
+      </div>
+
+      <button onClick={save} style={{ background: '#2196F3', color: 'white', border: 'none', padding: '12px 20px', fontSize: '16px' }}>حفظ التغييرات</button>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [user, setUser] = useState<any>(null);
   const [departments, setDepartments] = useState<any[]>([]);
@@ -24,6 +301,7 @@ export default function Dashboard() {
   const [usersTotal, setUsersTotal] = useState<number | null>(null);
   const [usersLoadingMore, setUsersLoadingMore] = useState<boolean>(false);
   const [books, setBooks] = useState<any[]>([]);
+  const [tutorials, setTutorials] = useState<any>({});
   const [showAddAssignment, setShowAddAssignment] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -146,6 +424,13 @@ export default function Dashboard() {
         if (pqResAdmin.ok) {
           const pqData = await pqResAdmin.json();
           setPreviousQuestions(pqData.previousQuestions || []);
+        }
+
+        // load tutorials for admin
+        const tutorialsRes = await fetch('/api/tutorials');
+        if (tutorialsRes.ok) {
+          const tutorialsData = await tutorialsRes.json();
+          setTutorials(tutorialsData.tutorials || {});
         }
 
         setVideos([]);
@@ -739,12 +1024,35 @@ export default function Dashboard() {
     }
   };
 
+  const updateTutorial = async (type: string, data: any) => {
+    try {
+      const res = await fetch('/api/tutorials', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, data }),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        setTutorials({ ...tutorials, [type]: result.tutorial });
+        showToast('تم حفظ التغييرات بنجاح', 'success');
+      } else {
+        showToast('فشل في حفظ التغييرات', 'error');
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('خطأ في الاتصال', 'error');
+    }
+  };
+
   const [selectedVideo, setSelectedVideo] = useState<{ video: any; subjectId?: string } | null>(null);
   const [apiLoaded, setApiLoaded] = useState(false);
 
   // Graduation projects states
   const [graduationProjects, setGraduationProjects] = useState<any[]>([]);
   const [showGradModal, setShowGradModal] = useState(false);
+
+  // Tutorials modal state
+  const [showTutorialsModal, setShowTutorialsModal] = useState(false);
   const [gradFile, setGradFile] = useState<File | null>(null);
   const [uploadingGrad, setUploadingGrad] = useState(false);
   const [gradTitle, setGradTitle] = useState('');
@@ -1668,6 +1976,20 @@ export default function Dashboard() {
                     </div>
                   )}
 
+                  {/* Tutorials management card (admin) */}
+                  {user.role === 'admin' && (
+                    <div className={styles.cardItem} style={{ border: '2px solid #ff9800', background: 'linear-gradient(135deg, #fff8e1 0%, #ffffff 100%)', boxShadow: '0 4px 12px rgba(255, 152, 0, 0.18)' }} onClick={() => setShowTutorialsModal(true)}>
+                      <div className={styles.cardItemContent}>
+                        <img src="../src/svg/video.svg" alt="" />
+                        <h4>الفيديوهات التوضيحية</h4>
+                      </div>
+                      <div className={styles.cardItemActions}>
+                        <p>إدارة الفيديوهات والنصوص</p>
+                        <p>تخصيص المحتوى التعليمي</p>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Department courses management card removed as requested */}
 
                   {/* Library card */}
@@ -2048,6 +2370,10 @@ export default function Dashboard() {
                       </div>
                     )}
                   </div>
+                )}
+
+                {activeTab === 'tutorials' && user.role === 'admin' && (
+                  <TutorialsManagement tutorials={tutorials} onUpdate={updateTutorial} />
                 )}
               </div>
             </>
@@ -3939,6 +4265,17 @@ export default function Dashboard() {
                 <button onClick={handleUploadGraduationProject} disabled={uploadingGrad || !gradFile} style={{ padding: '8px 12px', background: uploadingGrad || !gradFile ? '#90caf9' : '#1976d2', color: 'white', border: 'none', borderRadius: 6, cursor: uploadingGrad || !gradFile ? 'not-allowed' : 'pointer' }}>{uploadingGrad ? 'جارٍ الرفع...' : 'رفع'}</button>
                 <button onClick={() => { setGradFile(null); setShowGradModal(false); setGradTitle(''); setGradDeptId(null); }} style={{ padding: '8px 12px', borderRadius: 6 }}>إلغاء</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTutorialsModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 100001, overflowY: 'auto', padding: '20px' }}>
+          <div style={{ background: 'white', padding: '28px', maxWidth: '900px', width: '100%', borderRadius: 12, position: 'relative', direction: 'rtl', marginTop: '20px', marginBottom: '20px', boxShadow: '0 8px 32px rgba(0,0,0,0.15)' }}>
+            <button onClick={() => setShowTutorialsModal(false)} style={{ position: 'absolute', left: 16, top: 16, fontSize: 28, border: 'none', background: 'none', cursor: 'pointer', color: '#666' }}>✕</button>
+            <div style={{ marginTop: '20px' }}>
+              <TutorialsManagement tutorials={tutorials} onUpdate={updateTutorial} />
             </div>
           </div>
         </div>

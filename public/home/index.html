@@ -249,6 +249,412 @@
         
       </section>
 
+      <!-- Video Tutorials section -->
+      <section class="video-tutorials section" id="video-tutorials">
+        <div class="container">
+          <div class="section-header">
+            <h3 class="title">الفيديوهات التوضيحية</h3>
+            <p class="text center-text">
+              شاهد الفيديوهات التوضيحية لفهم كيفية استخدام المنصة
+            </p>
+          </div>
+
+          <div id="tutorial-buttons" style="display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap; margin: 3rem 0;">
+            <button class="btn" onclick="showTab('student')" style="padding: 12px 30px; font-size: 1rem;">فيديو توضيحي للطالب</button>
+            <button class="btn" onclick="showTab('teacher')" style="padding: 12px 30px; font-size: 1rem;">فيديو توضيحي للأستاذ</button>
+            <button class="btn" onclick="showTab('all')" style="padding: 12px 30px; font-size: 1rem;">الفيديو التوضيحي العام</button>
+          </div>
+
+          <div id="tutorial-content" style="max-width: 900px; margin: 0 auto; background: var(--light-three); padding: 2rem; border-radius: 12px;">
+            
+            <!-- Student Content -->
+            <div id="student-content" style="display: block;">
+              <div style="margin-bottom: 2rem;">
+                <video width="100%" height="auto" controls style="border-radius: 8px;">
+                  <source src="./video/todehe.mp4" type="video/mp4">
+                  متصفحك لا يدعم عنصر الفيديو
+                </video>
+              </div>
+
+              <button class="btn" style="width: 100%; padding: 12px; margin-bottom: 2rem; background-color: var(--main-color); color: white; border: none; cursor: pointer;" onclick="document.getElementById('student-detail').style.display = document.getElementById('student-detail').style.display === 'none' ? 'block' : 'none';">شرح نصي</button>
+              
+              <div id="student-detail" style="display: none;">
+                <h3 style="color: var(--main-color); margin-bottom: 1rem; font-size: 1.3rem;">دليل الطالب الشامل</h3>
+                
+                <div style="margin: 1.5rem 0; padding: 1rem; background: white; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">🚪 الخطوة 1: تسجيل الدخول لأول مرة</h4>
+                  <p style="line-height: 1.6; color: #666;">
+                    <strong>كيف تدخل المنصة؟</strong><br>
+                    1. اذهب إلى الصفحة الرئيسية للمنصة<br>
+                    2. انقر على زر "تسجيل الدخول" في أعلى الصفحة<br>
+                    3. أدخل اسم المستخدم الخاص بك (عادةً رقم الطالب أو البريد الجامعي)<br>
+                    4. أدخل كلمة المرور التي تم إعطاؤها لك من قبل الجامعة<br>
+                    5. يمكنك اختيار "تذكرني" للبقاء مسجل الدخول لفترة أطول<br>
+                    6. انقر على "دخول" وستصل إلى لوحة التحكم الخاصة بك
+                  </p>
+                </div>
+
+                <div style="margin: 1.5rem 0; padding: 1rem; background: white; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">📚 الخطوة 2: استكشف المحتوى الدراسي</h4>
+                  <p style="line-height: 1.6; color: #666;">
+                    <strong>ما ستجده في لوحتك الشخصية:</strong><br>
+                    • <strong>الدورات الدراسية:</strong> قائمة بجميع المواد التي أنت مسجل فيها هذا الفصل<br>
+                    • <strong>المحاضرات والفيديوهات:</strong> المحتوى التعليمي المرفوع من قبل الأساتذة<br>
+                    • <strong>الملفات والوثائق:</strong> الكتب الإلكترونية والملاحظات والمراجع<br>
+                    • <strong>الواجبات والتكليفات:</strong> المهام المطلوبة منك مع تواريخ التسليم<br>
+                    • <strong>الدرجات والتقييمات:</strong> نتائج اختباراتك وواجباتك<br>
+                    • <strong>الإعلانات:</strong> التنبيهات المهمة من الأساتذة والإدارة
+                  </p>
+                </div>
+
+                <div style="margin: 1.5rem 0; padding: 1rem; background: white; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">📝 الخطوة 3: كيف تتفاعل مع المحتوى</h4>
+                  <p style="line-height: 1.6; color: #666;">
+                    <strong>مشاهدة المحاضرات:</strong><br>
+                    - انقر على اسم المادة لترى المحاضرات المتاحة<br>
+                    - اضغط على الفيديو للمشاهدة<br>
+                    - يمكنك إيقاف وإعادة تشغيل الفيديو حسب راحتك<br><br>
+                    <strong>تحميل الملفات:</strong><br>
+                    - ابحث عن أيقونة التحميل بجانب اسم الملف<br>
+                    - انقر عليها لحفظ الملف على جهازك<br><br>
+                    <strong>تسليم الواجبات:</strong><br>
+                    - اذهب إلى قسم "الواجبات"<br>
+                    - اختر الواجب المطلوب<br>
+                    - ارفع ملف إجابتك<br>
+                    - تأكد من التسليم قبل الموعد النهائي
+                  </p>
+                </div>
+
+                <div style="margin: 1.5rem 0; padding: 1rem; background: white; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">💬 الخطوة 4: التواصل والمساعدة</h4>
+                  <p style="line-height: 1.6; color: #666;">
+                    <strong>كيف تتواصل مع الأساتذة:</strong><br>
+                    - استخدم نظام الرسائل الداخلي في المنصة<br>
+                    - انقر على "إرسال رسالة" من صفحة المادة<br>
+                    - اكتب سؤالك بوضوح وانتظر الرد<br><br>
+                    <strong>المكتبة الرقمية:</strong><br>
+                    - ابحث عن الكتب والمراجع في قسم "المكتبة"<br>
+                    - يمكنك قراءة الكتب مباشرة أو تحميلها<br><br>
+                    <strong>الدعم الفني:</strong><br>
+                    - إذا واجهت مشكلة تقنية، اتصل بالدعم الفني<br>
+                    - استخدم البريد الإلكتروني أو رقم الهاتف المتاح
+                  </p>
+                </div>
+
+                <div style="margin: 1.5rem 0; padding: 1rem; background: white; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">📊 الخطوة 5: متابعة التقدم والدرجات</h4>
+                  <p style="line-height: 1.6; color: #666;">
+                    <strong>كيف ترى درجاتك:</strong><br>
+                    - اذهب إلى قسم "الدرجات" في لوحتك الشخصية<br>
+                    - ستجد جدول بجميع الاختبارات والواجبات<br>
+                    - يمكنك حساب معدلك التراكمي<br><br>
+                    <strong>نصائح للنجاح:</strong><br>
+                    • تابِع المحاضرات بانتظام<br>
+                    • سلم الواجبات في موعدها<br>
+                    • اسأل الأساتذة عند الحاجة<br>
+                    • استخدم المكتبة للمراجع الإضافية<br>
+                    • شارك في المناقشات مع زملائك
+                  </p>
+                </div>
+
+                <div style="margin: 1.5rem 0; padding: 1rem; background: #f8f9fa; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">💡 نصائح مهمة للاستخدام الأمثل</h4>
+                  <ul style="color: #666; list-style: none; padding: 0; line-height: 1.8;">
+                    <li>🔒 <strong>أمان الحساب:</strong> لا تشارك كلمة المرور مع أي شخص</li>
+                    <li>📱 <strong>الوصول المتنقل:</strong> يمكنك استخدام المنصة من الهاتف أو التابلت</li>
+                    <li>🔔 <strong>الإشعارات:</strong> فعل الإشعارات لتكون على اطلاع دائم</li>
+                    <li>💾 <strong>الحفظ:</strong> احفظ ملفاتك المهمة في مجلد منفصل</li>
+                    <li>❓ <strong>المساعدة:</strong> لا تتردد في السؤال عند مواجهة أي صعوبة</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <!-- Teacher Content -->
+            <div id="teacher-content" style="display: none;">
+              <div style="margin-bottom: 2rem;">
+                <video width="100%" height="auto" controls style="border-radius: 8px;">
+                  <source src="./video/todehe.mp4" type="video/mp4">
+                  متصفحك لا يدعم عنصر الفيديو
+                </video>
+              </div>
+
+              <button class="btn" style="width: 100%; padding: 12px; margin-bottom: 2rem; background-color: var(--main-color); color: white; border: none; cursor: pointer;" onclick="document.getElementById('teacher-detail').style.display = document.getElementById('teacher-detail').style.display === 'none' ? 'block' : 'none';">شرح نصي</button>
+              
+              <div id="teacher-detail" style="display: none;">
+                <h3 style="color: var(--main-color); margin-bottom: 1rem; font-size: 1.3rem;">دليل الأستاذ الشامل</h3>
+                
+                <div style="margin: 1.5rem 0; padding: 1rem; background: white; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">🚪 الخطوة 1: تسجيل الدخول والإعداد</h4>
+                  <p style="line-height: 1.6; color: #666;">
+                    <strong>كيف يدخل الأستاذ المنصة؟</strong><br>
+                    1. استخدم البريد الإلكتروني الجامعي الخاص بك<br>
+                    2. أدخل كلمة المرور المخصصة للأساتذة<br>
+                    3. ستحصل على صلاحيات إدارية متقدمة<br>
+                    4. قم بتحديث ملفك الشخصي ومعلومات الاتصال<br>
+                    5. راجع إعدادات الإشعارات والتفضيلات
+                  </p>
+                </div>
+
+                <div style="margin: 1.5rem 0; padding: 1rem; background: white; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">📚 الخطوة 2: إدارة المحتوى التعليمي</h4>
+                  <p style="line-height: 1.6; color: #666;">
+                    <strong>إضافة المواد والمحاضرات:</strong><br>
+                    • أنشئ دورة جديدة أو اختر دورة موجودة<br>
+                    • ارفع المحاضرات كفيديوهات أو ملفات PDF<br>
+                    • أضف وصفاً مفصلاً لكل محاضرة<br>
+                    • حدد تواريخ البدء والانتهاء<br><br>
+                    <strong>تنظيم المحتوى:</strong><br>
+                    • قسم المادة إلى وحدات دراسية<br>
+                    • أضف روابط خارجية مفيدة<br>
+                    • حدد المتطلبات المسبقة لكل وحدة
+                  </p>
+                </div>
+
+                <div style="margin: 1.5rem 0; padding: 1rem; background: white; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">📝 الخطوة 3: إنشاء التقييمات والواجبات</h4>
+                  <p style="line-height: 1.6; color: #666;">
+                    <strong>إنشاء الواجبات:</strong><br>
+                    - حدد نوع الواجب (كتابي، مشروع، بحث)<br>
+                    - حدد الموعد النهائي للتسليم<br>
+                    - أضف تعليمات واضحة<br>
+                    - حدد طريقة التقييم<br><br>
+                    <strong>الاختبارات والامتحانات:</strong><br>
+                    - أنشئ اختبارات متعددة الخيارات أو مقالية<br>
+                    - حدد الوقت المسموح للاختبار<br>
+                    - فعل خاصية منع الغش إذا لزم الأمر<br>
+                    - راجع الإجابات وأضف الدرجات
+                  </p>
+                </div>
+
+                <div style="margin: 1.5rem 0; padding: 1rem; background: white; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">👥 الخطوة 4: متابعة الطلاب وإدارة الحضور</h4>
+                  <p style="line-height: 1.6; color: #666;">
+                    <strong>تسجيل الحضور:</strong><br>
+                    - أنشئ جلسات حضور منتظمة<br>
+                    - سجل حضور الطلاب يدوياً أو آلياً<br>
+                    - راقب معدلات الحضور<br>
+                    - أرسل تنبيهات للطلاب المتغيبين<br><br>
+                    <strong>متابعة الأداء:</strong><br>
+                    - راجع تقدم كل طالب على حدة<br>
+                    - حدد الطلاب الذين يحتاجون مساعدة إضافية<br>
+                    - قدم تغذية راجعة شخصية
+                  </p>
+                </div>
+
+                <div style="margin: 1.5rem 0; padding: 1rem; background: white; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">💬 الخطوة 5: التواصل مع الطلاب والإدارة</h4>
+                  <p style="line-height: 1.6; color: #666;">
+                    <strong>إرسال الإعلانات:</strong><br>
+                    - أعلن عن التغييرات في الجدول الدراسي<br>
+                    - أرسل تذكيرات بالواجبات والاختبارات<br>
+                    - شارك أخبار مهمة مع الطلاب<br><br>
+                    <strong>الرد على الاستفسارات:</strong><br>
+                    - راقب رسائل الطلاب بانتظام<br>
+                    - قدم إجابات واضحة ومفيدة<br>
+                    - شجع الطلاب على طرح الأسئلة
+                  </p>
+                </div>
+
+                <div style="margin: 1.5rem 0; padding: 1rem; background: white; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">📊 الخطوة 6: التقارير والإحصائيات</h4>
+                  <p style="line-height: 1.6; color: #666;">
+                    <strong>مراقبة التقدم:</strong><br>
+                    - اعرض إحصائيات الحضور والمشاركة<br>
+                    - راقب معدلات النجاح في الاختبارات<br>
+                    - حدد نقاط القوة والضعف في المادة<br><br>
+                    <strong>إعداد التقارير:</strong><br>
+                    - أنشئ تقارير مفصلة لكل طالب<br>
+                    - قدم توصيات للإدارة<br>
+                    - شارك النتائج مع الطلاب والآباء
+                  </p>
+                </div>
+
+                <div style="margin: 1.5rem 0; padding: 1rem; background: #f8f9fa; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">💡 نصائح للأساتذة</h4>
+                  <ul style="color: #666; list-style: none; padding: 0; line-height: 1.8;">
+                    <li>🎯 <strong>التنظيم:</strong> خطط للمحتوى مسبقاً وحدد أهدافاً واضحة</li>
+                    <li>⏰ <strong>الوقت:</strong> حدد مواعيد ثابتة للرد على الاستفسارات</li>
+                    <li>📈 <strong>التطوير:</strong> استخدم الإحصائيات لتحسين طرق التدريس</li>
+                    <li>🤝 <strong>التفاعل:</strong> شجع الطلاب على المشاركة الفعالة</li>
+                    <li>🔄 <strong>التحديث:</strong> راجع وحدث المحتوى بانتظام</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <!-- All Users Content -->
+            <div id="all-content" style="display: none;">
+              <div style="margin-bottom: 2rem;">
+                <video width="100%" height="auto" controls style="border-radius: 8px;">
+                  <source src="./video/todehe.mp4" type="video/mp4">
+                  متصفحك لا يدعم عنصر الفيديو
+                </video>
+              </div>
+
+              <button class="btn" style="width: 100%; padding: 12px; margin-bottom: 2rem; background-color: var(--main-color); color: white; border: none; cursor: pointer;" onclick="document.getElementById('all-detail').style.display = document.getElementById('all-detail').style.display === 'none' ? 'block' : 'none';">شرح نصي</button>
+              
+              <div id="all-detail" style="display: none;">
+                <h3 style="color: var(--main-color); margin-bottom: 1rem; font-size: 1.3rem;">دليل المستخدمين العام الشامل</h3>
+                
+                <div style="margin: 1.5rem 0; padding: 1rem; background: white; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">🚪 البدء: تسجيل الدخول للمنصة</h4>
+                  <p style="line-height: 1.6; color: #666;">
+                    <strong>خطوات الدخول الأولى:</strong><br>
+                    1. افتح المتصفح واذهب إلى رابط المنصة<br>
+                    2. انقر على زر "تسجيل الدخول" في الزاوية العلوية<br>
+                    3. أدخل اسم المستخدم (رقم الطالب أو البريد الجامعي)<br>
+                    4. أدخل كلمة المرور المخصصة<br>
+                    5. اختر "تذكرني" إذا كنت تستخدم جهازك الشخصي<br>
+                    6. انقر "دخول" للوصول إلى حسابك
+                  </p>
+                </div>
+
+                <div style="margin: 1.5rem 0; padding: 1rem; background: white; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">🏠 الصفحة الرئيسية: لوحة التحكم</h4>
+                  <p style="line-height: 1.6; color: #666;">
+                    <strong>ما ستجده في الصفحة الرئيسية:</strong><br>
+                    • <strong>البطاقات الرئيسية:</strong> اختصارات سريعة للوظائف الأساسية<br>
+                    • <strong>الإعلانات:</strong> الأخبار والتنبيهات المهمة<br>
+                    • <strong>التقويم:</strong> المواعيد الدراسية والاختبارات<br>
+                    • <strong>الإحصائيات:</strong> نظرة عامة على أدائك الأكاديمي<br>
+                    • <strong>الرسائل:</strong> التواصل مع الأساتذة والإدارة<br>
+                    • <strong>الملف الشخصي:</strong> معلوماتك وبياناتك الشخصية
+                  </p>
+                </div>
+
+                <div style="margin: 1.5rem 0; padding: 1rem; background: white; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">📚 المحتوى التعليمي والدورات</h4>
+                  <p style="line-height: 1.6; color: #666;">
+                    <strong>استكشاف المواد الدراسية:</strong><br>
+                    - قائمة بجميع الدورات المسجل فيها<br>
+                    - المحاضرات كفيديوهات أو ملفات PDF<br>
+                    - الملاحظات والمراجع التعليمية<br>
+                    - الواجبات والتكليفات المطلوبة<br><br>
+                    <strong>كيفية التفاعل:</strong><br>
+                    • شاهد الفيديوهات في أي وقت<br>
+                    • حمل الملفات للقراءة دون اتصال<br>
+                    • سلم الواجبات قبل الموعد النهائي<br>
+                    • تابع تقدمك في كل مادة
+                  </p>
+                </div>
+
+                <div style="margin: 1.5rem 0; padding: 1rem; background: white; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">📖 المكتبة الرقمية</h4>
+                  <p style="line-height: 1.6; color: #666;">
+                    <strong>مصادر التعلم الإضافية:</strong><br>
+                    • الكتب الإلكترونية والمراجع<br>
+                    • الأبحاث والدراسات العلمية<br>
+                    • المقالات والمحاضرات المسجلة<br>
+                    • الموارد التعليمية المتنوعة<br><br>
+                    <strong>كيفية الاستخدام:</strong><br>
+                    - ابحث عن الكتب بالعنوان أو المؤلف<br>
+                    - اقرأ مباشرة في المتصفح<br>
+                    - حمل الكتب للقراءة دون اتصال<br>
+                    - شارك الكتب مع زملائك
+                  </p>
+                </div>
+
+                <div style="margin: 1.5rem 0; padding: 1rem; background: white; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">💬 نظام التواصل والرسائل</h4>
+                  <p style="line-height: 1.6; color: #666;">
+                    <strong>التواصل الفعال:</strong><br>
+                    • إرسال رسائل للأساتذة والإدارة<br>
+                    • الرد على استفسارات الطلاب (للأساتذة)<br>
+                    • مشاركة الملفات والوثائق<br>
+                    • إشعارات فورية للرسائل الجديدة<br><br>
+                    <strong>نصائح للتواصل:</strong><br>
+                    - اكتب رسائل واضحة ومختصرة<br>
+                    - استخدم اللغة المناسبة<br>
+                    - رد على الرسائل بانتظام<br>
+                    - احترم خصوصية الآخرين
+                  </p>
+                </div>
+
+                <div style="margin: 1.5rem 0; padding: 1rem; background: white; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">📊 المتابعة والتقييم</h4>
+                  <p style="line-height: 1.6; color: #666;">
+                    <strong>مراقبة الأداء:</strong><br>
+                    • درجات الاختبارات والواجبات<br>
+                    • معدلات الحضور والمشاركة<br>
+                    • التقدم الأكاديمي العام<br>
+                    • الإحصائيات والتقارير الشخصية<br><br>
+                    <strong>فهم الدرجات:</strong><br>
+                    - مراجعة تفصيلية لكل تقييم<br>
+                    - ملاحظات الأساتذة والتعليقات<br>
+                    - مقارنة مع المعدلات العامة<br>
+                    - خطط تحسين الأداء
+                  </p>
+                </div>
+
+                <div style="margin: 1.5rem 0; padding: 1rem; background: white; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">🔔 الإشعارات والتنبيهات</h4>
+                  <p style="line-height: 1.6; color: #666;">
+                    <strong>أنواع الإشعارات:</strong><br>
+                    • إعلانات مهمة من الإدارة<br>
+                    • تذكيرات بالواجبات والاختبارات<br>
+                    • تغييرات في الجدول الدراسي<br>
+                    • رسائل جديدة وردود<br>
+                    • تحديثات في المحتوى التعليمي<br><br>
+                    <strong>إدارة الإشعارات:</strong><br>
+                    - فعل/إلغاء الإشعارات حسب الحاجة<br>
+                    - تخصيص أنواع الإشعارات المرغوبة<br>
+                    - مراجعة الإشعارات القديمة
+                  </p>
+                </div>
+
+                <div style="margin: 1.5rem 0; padding: 1rem; background: #f8f9fa; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">🔒 الأمان والخصوصية</h4>
+                  <p style="line-height: 1.6; color: #666;">
+                    <strong>حماية حسابك:</strong><br>
+                    • لا تشارك كلمة المرور مع أي شخص<br>
+                    • غير كلمة المرور بانتظام<br>
+                    • استخدم كلمات مرور قوية ومعقدة<br>
+                    • أبلغ الإدارة عند الشك في اختراق الحساب<br><br>
+                    <strong>الخصوصية:</strong><br>
+                    • معلوماتك الشخصية محمية<br>
+                    • المحتوى التعليمي آمن ومشفر<br>
+                    • التواصل الخاص محفوظ
+                  </p>
+                </div>
+
+                <div style="margin: 1.5rem 0; padding: 1rem; background: #f8f9fa; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">📱 الوصول من الأجهزة المختلفة</h4>
+                  <ul style="color: #666; list-style: none; padding: 0; line-height: 1.8;">
+                    <li>💻 <strong>الحاسوب:</strong> الاستخدام الكامل لجميع الميزات</li>
+                    <li>📱 <strong>الهاتف الذكي:</strong> وصول سريع ومريح</li>
+                    <li>📟 <strong>التابلت:</strong> تجربة وسط بين الحاسوب والهاتف</li>
+                    <li>🌐 <strong>المتصفحات:</strong> متوافق مع جميع المتصفحات الحديثة</li>
+                    <li>📶 <strong>دون اتصال:</strong> قراءة المحتوى المحمل مسبقاً</li>
+                  </ul>
+                </div>
+
+                <div style="margin: 1.5rem 0; padding: 1rem; background: #e8f5e8; border-right: 4px solid var(--main-color); border-radius: 4px;">
+                  <h4 style="color: var(--main-color); margin-bottom: 0.8rem;">🆘 الدعم الفني والمساعدة</h4>
+                  <p style="line-height: 1.6; color: #666;">
+                    <strong>كيف تحصل على المساعدة:</strong><br>
+                    • قسم "المساعدة" في المنصة<br>
+                    • دليل المستخدم التفاعلي<br>
+                    • البريد الإلكتروني للدعم الفني<br>
+                    • رقم الهاتف للطوارئ<br>
+                    • منتدى الطلاب والأساتذة<br><br>
+                    <strong>نصيحة:</strong> لا تتردد في طلب المساعدة عند مواجهة أي صعوبة. المنصة مصممة لتكون سهلة الاستخدام، وفريق الدعم جاهز لمساعدتك في أي وقت.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <img
+            src="./img/shapes/points3.png"
+            class="points points2 points-sq"
+            alt=""
+            style="width:120px; height:auto;"
+          />
+        </div>
+      </section>
+
       <!-- Portfolio section -->
 
       <section class="portfolio section" id="portfolio">
@@ -719,7 +1125,35 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
     <script src="./js/isotope.pkgd.min.js"></script>
-    <script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script>
-    <script src="./js/app.js"></script>
+    <script src="httab(tab) {
+        // إخفاء جميع التبويبات
+        document.getElementById('student-content').style.display = 'none';
+        document.getElementById('teacher-content').style.display = 'none';
+        document.getElementById('all-content').style.display = 'none';
+
+        // إظهار التبويب المختار
+        if (tab === 'student') {
+          document.getElementById('student-content').style.display = 'block';
+          document.getElementById('student-detail').style.display = 'none';
+        } else if (tab === 'teacher') {
+          document.getElementById('teacher-content').style.display = 'block';
+          document.getElementById('teacher-detail').style.display = 'none';
+        } else if (tab === 'all') {
+          document.getElementById('all-content').style.display = 'block';
+          document.getElementById('all-detail').style.display = 'none';
+        }
+      }
+
+      function toggleDetail(detailId) {
+        const element = document.getElementById(detailId);
+        if (element) {
+          element.style.display = element.style.display === 'none' ? 'block' : 'none';
+        }
+      }   const type = this.getAttribute('data-type');
+            showTutorial(type);
+          });
+        });
+      });
+    </script>
   </body>
 </html>

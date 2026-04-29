@@ -39,6 +39,21 @@ export default function HomePage() {
       <Script src="/home/js/isotope.pkgd.min.js" strategy="beforeInteractive" />
       <Script src="https://unpkg.com/swiper/swiper-bundle.min.js" strategy="afterInteractive" />
       <Script src="/home/js/app.js" strategy="afterInteractive" />
+
+      {/* Add showTab function for video tutorials */}
+      <Script id="showTab-script" strategy="afterInteractive">
+        {`
+          window.showTab = function(tab) {
+            // Hide all content divs
+            document.getElementById('student-content').style.display = 'none';
+            document.getElementById('teacher-content').style.display = 'none';
+            document.getElementById('all-content').style.display = 'none';
+            
+            // Show the selected content div
+            document.getElementById(tab + '-content').style.display = 'block';
+          };
+        `}
+      </Script>
     </>
   );
 }
