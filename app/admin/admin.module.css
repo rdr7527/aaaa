@@ -1,0 +1,241 @@
+.container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f8f9fa;
+  font-family: 'Tajawal', 'Cairo', system-ui, -apple-system, sans-serif;
+  direction: rtl;
+}
+
+.navbar {
+  background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
+  color: white;
+  padding: 1.5rem 2rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(13, 71, 161, 0.15);
+  letter-spacing: 0.3px;
+}
+
+.tabs {
+  display: flex;
+  gap: 0;
+  padding: 1rem 2rem;
+  background: white;
+  border-bottom: 2px solid #e3f2fd;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.tabs button {
+  padding: 0.75rem 1.5rem;
+  background: transparent;
+  border: none;
+  color: #455a64;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: all 0.3s;
+  border-bottom: 3px solid transparent;
+  font-family: inherit;
+}
+
+.tabs button:hover {
+  color: #1565c0;
+}
+
+.tabs button.active {
+  color: #0d47a1;
+  border-bottom-color: #0d47a1;
+}
+
+.main {
+  flex: 1;
+  padding: 2rem;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.tabContent {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+
+.form {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  border: 1px solid #e3f2fd;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.form h2 {
+  font-size: 1.25rem;
+  margin-bottom: 1.5rem;
+  color: #0d47a1;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.form input,
+.form textarea,
+.form select {
+  width: 100%;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  border: 2px solid #e3f2fd;
+  border-radius: 6px;
+  background: #f8f9fa;
+  color: #212529;
+  font-size: 0.95rem;
+  font-family: inherit;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.form input:focus,
+.form textarea:focus,
+.form select:focus {
+  outline: none;
+  border-color: #1565c0;
+  background: white;
+  box-shadow: 0 0 0 4px rgba(21, 101, 192, 0.1);
+}
+
+.form button {
+  width: 100%;
+  padding: 0.875rem;
+  background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: inherit;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 8px rgba(13, 71, 161, 0.2);
+}
+
+.form button:hover {
+  background: linear-gradient(135deg, #0d47a1 0%, #082a6b 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(13, 71, 161, 0.3);
+}
+
+.list {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  border: 1px solid #e3f2fd;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.list h2 {
+  font-size: 1.25rem;
+  margin-bottom: 1.5rem;
+  color: #0d47a1;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e8eef7 100%);
+  border-radius: 6px;
+  border: 1px solid #e3f2fd;
+  transition: all 0.3s;
+}
+
+.item:hover {
+  border-color: #1565c0;
+  box-shadow: 0 2px 8px rgba(21, 101, 192, 0.1);
+}
+
+.item h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0d47a1;
+  margin: 0;
+  letter-spacing: 0.2px;
+}
+
+.item h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1565c0;
+  margin: 0.75rem 0 0.25rem 0;
+  letter-spacing: 0.2px;
+}
+
+.item p {
+  font-size: 0.875rem;
+  color: #616161;
+  margin: 0.5rem 0 0 0;
+  font-weight: 500;
+}
+
+.deleteBtn {
+  background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: all 0.3s;
+  font-size: 0.875rem;
+  letter-spacing: 0.3px;
+}
+
+.deleteBtn:hover {
+  background: linear-gradient(135deg, #b71c1c 0%, #7a0c0c 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(211, 47, 47, 0.2);
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  font-size: 1.125rem;
+  color: #1565c0;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+@media (max-width: 768px) {
+  .tabs {
+    flex-direction: column;
+    padding: 0;
+  }
+
+  .tabs button {
+    border-bottom: none;
+    border-right: 3px solid transparent;
+    padding: 1rem;
+    border-radius: 0;
+  }
+
+  .tabs button.active {
+    border-right-color: var(--primary);
+    border-bottom-color: transparent;
+  }
+
+  .tabContent {
+    grid-template-columns: 1fr;
+  }
+
+  .main {
+    padding: 1rem;
+  }
+}
