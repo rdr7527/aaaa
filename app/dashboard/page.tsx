@@ -11,7 +11,7 @@ function formatAnswer(answer: any, answerType?: string): string {
   return String(answer);
 }
 
-function TutorialsManagement({ tutorials, onUpdate }: any) {
+function TutorialsManagement({ tutorials, onUpdate, onSaveStatus }: any) {
   const [selectedType, setSelectedType] = useState('student');
   const [video, setVideo] = useState('');
   const [title, setTitle] = useState('');
@@ -22,6 +22,7 @@ function TutorialsManagement({ tutorials, onUpdate }: any) {
   const [fileToUpload, setFileToUpload] = useState<File | null>(null);
   const [uploadMessage, setUploadMessage] = useState('');
   const [uploadError, setUploadError] = useState('');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -146,9 +147,42 @@ function TutorialsManagement({ tutorials, onUpdate }: any) {
     setTips(tips.filter((_, i) => i !== index));
   };
 
-  const save = () => {
-    onUpdate(selectedType, { video, title, steps, tips });
+  const save = async () => {
+    setSaveStatus('saving');
+    if (onSaveStatus) onSaveStatus('saving');
+    
+    try {
+      const res = await fetch('/api/tutorials', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: selectedType, data: { video, title, steps, tips } }),
+      });
+      
+      if (res.ok) {
+        const result = await res.json();
+        setSaveStatus('success');
+        if (onSaveStatus) onSaveStatus('success');
+        onUpdate(selectedType, { video, title, steps, tips });
+      } else {
+        setSaveStatus('error');
+        if (onSaveStatus) onSaveStatus('error');
+      }
+    } catch (e) {
+      setSaveStatus('error');
+      if (onSaveStatus) onSaveStatus('error');
+    }
   };
+
+  // Auto-reset status after delay
+  useEffect(() => {
+    if (saveStatus === 'success' || saveStatus === 'error') {
+      const timer = setTimeout(() => {
+        setSaveStatus('idle');
+        if (onSaveStatus) onSaveStatus('idle');
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [saveStatus, onSaveStatus]);
 
   return (
     <div id="tutorials-management">
@@ -283,7 +317,43 @@ function TutorialsManagement({ tutorials, onUpdate }: any) {
         <button onClick={addTip} style={{ background: '#4CAF50', color: 'white', border: 'none', padding: '8px 15px' }}>إضافة نصيحة</button>
       </div>
 
-      <button onClick={save} style={{ background: '#2196F3', color: 'white', border: 'none', padding: '12px 20px', fontSize: '16px' }}>حفظ التغييرات</button>
+      {/* Save Status Display */}
+      {saveStatus !== 'idle' && (
+        <div style={{ 
+          marginBottom: '15px', 
+          padding: '12px 20px', 
+          borderRadius: '10px',
+          background: saveStatus === 'saving' ? '#fff3cd' : saveStatus === 'success' ? '#d4edda' : '#f8d7da',
+          color: saveStatus === 'saving' ? '#856404' : saveStatus === 'success' ? '#155724' : '#721c24',
+          border: `1px solid ${saveStatus === 'saving' ? '#ffeeba' : saveStatus === 'success' ? '#c3e6cb' : '#f5c6cb'}`,
+          textAlign: 'center',
+          fontWeight: 'bold',
+          animation: 'fadeIn 0.3s ease-in-out'
+        }}>
+          {saveStatus === 'saving' && '⏳ جاري الحفظ...'}
+          {saveStatus === 'success' && '✓ تم حفظ التغييرات بنجاح'}
+          {saveStatus === 'error' && '❌ فشل في حفظ التغييرات'}
+        </div>
+      )}
+
+      <button 
+        onClick={save} 
+        disabled={saveStatus === 'saving'}
+        style={{ 
+          background: saveStatus === 'saving' ? '#6c757d' : saveStatus === 'success' ? '#28a745' : '#2196F3', 
+          color: 'white', 
+          border: 'none', 
+          padding: '12px 20px', 
+          fontSize: '16px',
+          cursor: saveStatus === 'saving' ? 'not-allowed' : 'pointer',
+          borderRadius: '8px',
+          transition: 'all 0.3s ease',
+          transform: saveStatus === 'saving' ? 'scale(0.98)' : 'scale(1)',
+          boxShadow: saveStatus === 'success' ? '0 0 10px rgba(40, 167, 69, 0.5)' : 'none'
+        }}
+      >
+        {saveStatus === 'saving' ? '⏳ جاري الحفظ...' : saveStatus === 'success' ? '✓ تم الحفظ' : '💾 حفظ التغييرات'}
+      </button>
     </div>
   );
 }
@@ -297,11 +367,13 @@ export default function Dashboard() {
   const [previousQuestions, setPreviousQuestions] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [usersPage, setUsersPage] = useState<number>(1);
+  const [gradeInputs, setGradeInputs] = useState<Record<string, string>>({});
   const [usersLimit] = useState<number>(50);
   const [usersTotal, setUsersTotal] = useState<number | null>(null);
   const [usersLoadingMore, setUsersLoadingMore] = useState<boolean>(false);
   const [books, setBooks] = useState<any[]>([]);
   const [tutorials, setTutorials] = useState<any>({});
+  const [tutorialsSaveStatus, setTutorialsSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [showAddAssignment, setShowAddAssignment] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -540,14 +612,14 @@ export default function Dashboard() {
     }
   };
 
-  const handleAddAssignment = async (title: string, question: string, answerType: string, options?: string[], correctAnswer?: string, dueDate?: string, subjectId?: string, fileRequirement?: string) => {
+  const handleAddAssignment = async (title: string, question: string, answerType: string, options?: string[], correctAnswer?: string, dueDate?: string, subjectId?: string, grade?: number | string, fileRequirement?: string) => {
     if (!user?.departmentId) return;
     try {
       const res = await fetch('/api/assignments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ title, question, answerType, options, correctAnswer, dueDate, departmentId: user.departmentId, subjectId, fileRequirement }),
+        body: JSON.stringify({ title, question, answerType, options, correctAnswer, dueDate, departmentId: user.departmentId, subjectId, grade, fileRequirement }),
       });
       if (res.ok) {
         // reload assignments
@@ -589,7 +661,31 @@ export default function Dashboard() {
       }
       if (res.ok) {
         // update local state to show completion to manager
-        setAssignments(prev => prev.map(a => a.id === assignmentId ? { ...a, completions: [...(a.completions || []), { userId: user.id, userName: user.name || user.id, answer, date: new Date().toISOString(), fileUrl: file ? `/api/uploads/assignments/${Date.now()}-${file.name}` : null }] } : a));
+        setAssignments(prev => prev.map(a => a.id === assignmentId ? { ...a, completions: [...(a.completions || []), { userId: user.id, userName: user.name || user.id, answer, date: new Date().toISOString(), fileUrl: file ? `/api/uploads/assignments/${Date.now()}-${file.name}` : null, approved: false, grade: null }] } : a));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleGradeCompletion = async (assignmentId: string, studentId: string, grade: string) => {
+    if (!grade) return;
+    try {
+      const res = await fetch('/api/assignments/complete', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ assignmentId, studentId, grade: Number(grade) }),
+      });
+      if (res.ok) {
+        setAssignments(prev => prev.map(a => {
+          if (a.id !== assignmentId) return a;
+          return {
+            ...a,
+            completions: (a.completions || []).map((c: any) => c.userId === studentId ? { ...c, grade: Number(grade), approved: true } : c),
+          };
+        }));
+        setGradeInputs(prev => ({ ...prev, [`${assignmentId}_${studentId}`]: '' }));
       }
     } catch (e) {
       console.error(e);
@@ -1024,7 +1120,9 @@ export default function Dashboard() {
     }
   };
 
-  const updateTutorial = async (type: string, data: any) => {
+  const updateTutorial = async (type: string, data: any, setSaveStatus?: (status: 'saving' | 'success' | 'error' | 'idle') => void) => {
+    const statusSetter = setSaveStatus || setTutorialsSaveStatus;
+    statusSetter('saving');
     try {
       const res = await fetch('/api/tutorials', {
         method: 'PUT',
@@ -1035,12 +1133,15 @@ export default function Dashboard() {
         const result = await res.json();
         setTutorials({ ...tutorials, [type]: result.tutorial });
         showToast('تم حفظ التغييرات بنجاح', 'success');
+        statusSetter('success');
       } else {
         showToast('فشل في حفظ التغييرات', 'error');
+        statusSetter('error');
       }
     } catch (e) {
       console.error(e);
       showToast('خطأ في الاتصال', 'error');
+      statusSetter('error');
     }
   };
 
@@ -2373,7 +2474,7 @@ export default function Dashboard() {
                 )}
 
                 {activeTab === 'tutorials' && user.role === 'admin' && (
-                  <TutorialsManagement tutorials={tutorials} onUpdate={updateTutorial} />
+                  <TutorialsManagement tutorials={tutorials} onUpdate={(type: string, data: any) => updateTutorial(type, data)} onSaveStatus={setTutorialsSaveStatus} />
                 )}
               </div>
             </>
@@ -2693,6 +2794,9 @@ export default function Dashboard() {
                                           📚 {a.subjectId ? `المادة: ${subjects.find(s => String(s.id) === String(a.subjectId))?.name || a.subjectId}` : ''}
                                         </div>
                                         <strong style={{ fontSize: 18, color: titleColor }}>📝 {a.title}</strong>
+                                        {a.grade !== undefined && a.grade !== null && (
+                                          <p style={{ margin: '4px 0 0 0', color: '#1565c0', fontSize: '13px' }}>🏷️ الدرجة الكاملة: {a.grade}</p>
+                                        )}
                                       </div>
                                       <span style={{ fontSize: 13, color: deadlineColor, fontWeight: 'bold' }}>
                                         {a.dueDate ? `⏰ المهلة: ${new Date(a.dueDate).toLocaleDateString('ar-SA')}` : ''}
@@ -2712,6 +2816,11 @@ export default function Dashboard() {
                                                     📥 تحميل الملف
                                                   </a>
                                                 </p>
+                                              )}
+                                              {userCompletion.approved && userCompletion.grade !== undefined && userCompletion.grade !== null ? (
+                                                <p style={{ marginTop: 10, color: '#1e7e34', fontWeight: 'bold' }}>الدرجة: {userCompletion.grade}</p>
+                                              ) : (
+                                                <p style={{ marginTop: 10, color: '#ff9800', fontWeight: 'bold' }}>في انتظار موافقة الأستاذ وتحديد الدرجة</p>
                                               )}
                                             </div>
                                           );
@@ -3148,8 +3257,49 @@ export default function Dashboard() {
                           const userVideos = videos.filter(v => subjects.find(s => s.id === v.subjectId && s.students?.includes(user?.id)));
                           const completedVideos = userVideos.filter(v => v.completions && v.completions.some((c: any) => c.userId === user?.id)).length;
                           const incompleteVideos = userVideos.length - completedVideos;
+
+                          const gradeSummary = userAssignments.reduce((acc: any, a: any) => {
+                            const completion = a.completions?.find((c: any) => String(c.userId) === String(user?.id) && c.approved && c.grade !== undefined && c.grade !== null);
+                            if (!completion) return acc;
+                            const subjectName = subjects.find((s: any) => String(s.id) === String(a.subjectId))?.name || (a.subjectId || 'بدون مادة');
+                            const obtained = Number(completion.grade);
+                            const full = a.grade !== undefined && a.grade !== null ? Number(a.grade) : 0;
+                            if (!acc.bySubject[subjectName]) {
+                              acc.bySubject[subjectName] = { obtained: 0, full: 0, count: 0 };
+                            }
+                            acc.bySubject[subjectName].obtained += obtained;
+                            acc.bySubject[subjectName].full += full;
+                            acc.bySubject[subjectName].count += 1;
+                            acc.totalObtained += obtained;
+                            acc.totalFull += full;
+                            return acc;
+                          }, { totalObtained: 0, totalFull: 0, bySubject: {} as Record<string, { obtained: number; full: number; count: number }> });
+                          const summarySubjects = Object.entries(gradeSummary.bySubject);
+
                           return (
                             <div className={styles.cardGrid}>
+                              <div className={styles.cardItem} style={{ background: '#e8f1ff', borderColor: '#2196f3' }}>
+                                <div className={styles.cardItemContent}>
+                                  <span style={{ fontSize: '32px', marginBottom: '8px' }}>🏅</span>
+                                  <h4>ملخص الدرجات</h4>
+                                </div>
+                                <div className={styles.cardItemActions} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '6px' }}>
+                                  <p style={{ fontSize: '18px', fontWeight: 'bold', margin: '0', color: '#1565c0' }}>
+                                    {gradeSummary.totalObtained}{gradeSummary.totalFull ? ` من ${gradeSummary.totalFull}` : ''}
+                                  </p>
+                                  {summarySubjects.length === 0 ? (
+                                    <p style={{ margin: 0, color: '#555', fontSize: '13px' }}>لا توجد درجات معتمدة حتى الآن</p>
+                                  ) : (
+                                    <div style={{ width: '100%', display: 'grid', gap: '4px' }}>
+                                      {summarySubjects.map(([subjectName, data]) => (
+                                        <p key={subjectName} style={{ margin: 0, color: '#333', fontSize: '13px' }}>
+                                          {subjectName}: {data.obtained}{data.full ? ` من ${data.full}` : ''}
+                                        </p>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
                               <div className={styles.cardItem} style={{ background: '#ffebee', borderColor: '#f44336' }}>
                                 <div className={styles.cardItemContent}>
                                   <img src="../src/svg/assignment.svg" alt="واجبات غير مكتملة" />
@@ -3234,7 +3384,7 @@ export default function Dashboard() {
             )}
 
             {addModalType === 'assignment' && (
-              <AddAssignmentForm subjects={subjects} onAdd={(title, question, answerType, options, correctAnswer, dueDate, subjectId, fileRequirement) => { handleAddAssignment(title, question, answerType, options, correctAnswer, dueDate, subjectId, fileRequirement); setAddModalType(null); }} />
+              <AddAssignmentForm subjects={subjects} onAdd={(title, question, answerType, options, correctAnswer, dueDate, subjectId, grade, fileRequirement) => { handleAddAssignment(title, question, answerType, options, correctAnswer, dueDate, subjectId, grade, fileRequirement); setAddModalType(null); }} />
             )}
 
             {addModalType === 'department' && (
@@ -3802,6 +3952,7 @@ export default function Dashboard() {
                           <div>
                             <h5 style={{ fontSize: '16px', fontWeight: 'bold', color: '#e65100', margin: '12px 0 8px 0' }}>📋 {a.title}</h5>
                             {a.subjectId && <div style={{ fontSize: '13px', color: '#666', marginBottom: '6px', fontWeight: '500' }}>📚 {subjects.find(s => String(s.id) === String(a.subjectId))?.name || a.subjectId}</div>}
+                            {a.grade !== undefined && a.grade !== null && <div style={{ fontSize: '13px', color: '#1565c0', marginBottom: '6px', fontWeight: '500' }}>🏷️ الدرجة الكاملة: {a.grade}</div>}
                             {a.dueDate && <div style={{ fontSize: '12px', color: '#ff9800', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>⏰ المهلة: {new Date(a.dueDate).toLocaleDateString('ar-SA')}</div>}
                           </div>
                           <button onClick={() => handleDeleteAssignment(a.id)} style={{ padding: '6px 12px', background: '#f44336', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.background = '#e53935'} onMouseLeave={(e) => e.currentTarget.style.background = '#f44336'}>🗑️ حذف</button>
@@ -3811,24 +3962,50 @@ export default function Dashboard() {
                           <div style={{ marginTop: 16, backgroundColor: '#fff3e0', padding: '14px', borderRadius: '10px', border: '2px solid #ffe0b2' }}>
                             <h6 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 'bold', color: '#e65100', display: 'flex', alignItems: 'center', gap: '6px' }}>📊 التسليمات ({(a.completions || []).length})</h6>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                              {(a.completions || []).map((c: any, idx: number) => (
-                                <div key={idx} style={{ border: '1px solid #ffe0b2', padding: '12px', borderRadius: '8px', background: '#ffffff', boxShadow: '0 1px 4px rgba(255, 152, 0, 0.1)', borderRight: '4px solid #ff9800' }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                                    <strong style={{ fontSize: '13px', color: '#e65100', display: 'flex', alignItems: 'center', gap: '6px' }}>👤 {c.userName || c.userId}</strong>
-                                    <span style={{ fontSize: '12px', color: '#999' }}>📅 {c.date ? new Date(c.date).toLocaleString('ar-SA') : ''}</span>
-                                  </div>
-                                  <div style={{ marginBottom: '10px', padding: '10px', background: '#fafafa', borderRadius: '6px', border: '1px solid #f0f0f0', fontSize: '13px', lineHeight: '1.6', color: '#333' }}>
-                                    <strong style={{ color: '#e65100' }}>✍️ الإجابة:</strong> {formatAnswer(c.answer, a.answerType)}
-                                  </div>
-                                  {c.fileUrl && (
-                                    <div style={{ padding: '10px', backgroundColor: '#e8f5e9', borderRadius: '6px', border: '1px solid #c8e6c9' }}>
-                                      <a href={c.fileUrl} download target="_blank" rel="noopener noreferrer" style={{ color: '#2e7d32', textDecoration: 'none', fontWeight: '600', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                        📥 تحميل الملف
-                                      </a>
+                              {(a.completions || []).map((c: any, idx: number) => {
+                                const completionKey = `${a.id}_${c.userId}`;
+                                return (
+                                  <div key={idx} style={{ border: '1px solid #ffe0b2', padding: '12px', borderRadius: '8px', background: '#ffffff', boxShadow: '0 1px 4px rgba(255, 152, 0, 0.1)', borderRight: '4px solid #ff9800' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                      <strong style={{ fontSize: '13px', color: '#e65100', display: 'flex', alignItems: 'center', gap: '6px' }}>👤 {c.userName || c.userId}</strong>
+                                      <span style={{ fontSize: '12px', color: '#999' }}>📅 {c.date ? new Date(c.date).toLocaleString('ar-SA') : ''}</span>
                                     </div>
-                                  )}
-                                </div>
-                              ))}
+                                    <div style={{ marginBottom: '10px', padding: '10px', background: '#fafafa', borderRadius: '6px', border: '1px solid #f0f0f0', fontSize: '13px', lineHeight: '1.6', color: '#333' }}>
+                                      <strong style={{ color: '#e65100' }}>✍️ الإجابة:</strong> {formatAnswer(c.answer, a.answerType)}
+                                    </div>
+                                    {c.fileUrl && (
+                                      <div style={{ padding: '10px', backgroundColor: '#e8f5e9', borderRadius: '6px', border: '1px solid #c8e6c9', marginBottom: '10px' }}>
+                                        <a href={c.fileUrl} download target="_blank" rel="noopener noreferrer" style={{ color: '#2e7d32', textDecoration: 'none', fontWeight: '600', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                          📥 تحميل الملف
+                                        </a>
+                                      </div>
+                                    )}
+                                    {c.approved && c.grade !== undefined && c.grade !== null ? (
+                                      <p style={{ fontWeight: 'bold', color: '#2e7d32', margin: '0 0 10px 0' }}>✅ الدرجة: {c.grade}</p>
+                                    ) : (
+                                      <p style={{ fontWeight: 'bold', color: '#ff9800', margin: '0 0 10px 0' }}>⏳ لم يتم تقييم هذا التسليم بعد</p>
+                                    )}
+                                    {(!c.approved || c.grade === undefined || c.grade === null) && (
+                                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginTop: '10px' }}>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          placeholder="درجة"
+                                          value={gradeInputs[completionKey] || ''}
+                                          onChange={(e) => setGradeInputs(prev => ({ ...prev, [completionKey]: e.target.value }))}
+                                          style={{ width: '120px', padding: '8px 10px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '13px' }}
+                                        />
+                                        <button
+                                          onClick={() => handleGradeCompletion(a.id, c.userId, gradeInputs[completionKey] || '')}
+                                          style={{ padding: '8px 14px', background: '#1976d2', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}
+                                        >
+                                          ✅ اعتمد الدرجة
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
                               {(!a.completions || a.completions.length === 0) && <p style={{ color: '#999', fontSize: '12px', margin: 0, fontStyle: 'italic' }}>لا توجد تسليمات بعد</p>}
                             </div>
                           </div>
@@ -4275,7 +4452,7 @@ export default function Dashboard() {
           <div style={{ background: 'white', padding: '28px', maxWidth: '900px', width: '100%', borderRadius: 12, position: 'relative', direction: 'rtl', marginTop: '20px', marginBottom: '20px', boxShadow: '0 8px 32px rgba(0,0,0,0.15)' }}>
             <button onClick={() => setShowTutorialsModal(false)} style={{ position: 'absolute', left: 16, top: 16, fontSize: 28, border: 'none', background: 'none', cursor: 'pointer', color: '#666' }}>✕</button>
             <div style={{ marginTop: '20px' }}>
-              <TutorialsManagement tutorials={tutorials} onUpdate={updateTutorial} />
+              <TutorialsManagement tutorials={tutorials} onUpdate={(type: string, data: any) => updateTutorial(type, data)} onSaveStatus={setTutorialsSaveStatus} />
             </div>
           </div>
         </div>
@@ -4526,13 +4703,14 @@ function AddVideoForm({ subjects, onAdd }: { subjects: any[]; onAdd: (title: str
   );
 }
 
-function AddAssignmentForm({ subjects, onAdd }: { subjects?: any[]; onAdd: (title: string, question: string, answerType: string, options?: string[], correctAnswer?: string, dueDate?: string, subjectId?: string, fileRequirement?: string) => void }) {
+function AddAssignmentForm({ subjects, onAdd }: { subjects?: any[]; onAdd: (title: string, question: string, answerType: string, options?: string[], correctAnswer?: string, dueDate?: string, subjectId?: string, grade?: number | string, fileRequirement?: string) => void }) {
   const [title, setTitle] = useState('');
   const [question, setQuestion] = useState('');
   const [answerType, setAnswerType] = useState('choice');
   const [optionsText, setOptionsText] = useState('');
   const [correctAnswer, setCorrectAnswer] = useState('');
   const [due, setDue] = useState('');
+  const [grade, setGrade] = useState('');
   const [subjectId, setSubjectId] = useState('');
   const [fileRequirement, setFileRequirement] = useState('none');
 
@@ -4540,7 +4718,7 @@ function AddAssignmentForm({ subjects, onAdd }: { subjects?: any[]; onAdd: (titl
   const btnStyle: React.CSSProperties = { padding: '10px 20px', background: '#ff9800', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: '600', transition: 'all 0.2s' };
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); const opts = optionsText ? optionsText.split('|').map(s => s.trim()).filter(Boolean) : undefined; const finalAnswerType = fileRequirement === 'required' ? 'essay' : answerType; onAdd(title, question, finalAnswerType, opts, correctAnswer || undefined, due || undefined, subjectId || undefined, fileRequirement); setTitle(''); setQuestion(''); setAnswerType('choice'); setOptionsText(''); setCorrectAnswer(''); setDue(''); setSubjectId(''); setFileRequirement('none'); }} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <form onSubmit={(e) => { e.preventDefault(); const opts = optionsText ? optionsText.split('|').map(s => s.trim()).filter(Boolean) : undefined; const finalAnswerType = fileRequirement === 'required' ? 'essay' : answerType; onAdd(title, question, finalAnswerType, opts, correctAnswer || undefined, due || undefined, subjectId || undefined, grade ? Number(grade) : undefined, fileRequirement); setTitle(''); setQuestion(''); setAnswerType('choice'); setOptionsText(''); setCorrectAnswer(''); setDue(''); setGrade(''); setSubjectId(''); setFileRequirement('none'); }} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <h3 style={{ margin: '0 0 12px 0', color: '#e65100', fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>📝 إضافة واجب جديد</h3>
       
       {/* العنوان والمادة - صفين */}
@@ -4619,6 +4797,10 @@ function AddAssignmentForm({ subjects, onAdd }: { subjects?: any[]; onAdd: (titl
         <div>
           <label style={{ fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>📅 تاريخ التسليم (اختياري)</label>
           <input type="date" value={due} onChange={(e) => setDue(e.target.value)} style={inputStyle} />
+        </div>
+        <div>
+          <label style={{ fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>🏷️ الدرجة الكاملة (اختياري)</label>
+          <input type="number" min="0" value={grade} onChange={(e) => setGrade(e.target.value)} placeholder="مثال: 100" style={inputStyle} />
         </div>
       </div>
 

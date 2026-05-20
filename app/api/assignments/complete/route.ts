@@ -85,9 +85,63 @@ export async function POST(req: Request) {
       userId: user.id,
       userName: user.name || user.id,
       date: new Date().toISOString(),
-      fileUrl
+      fileUrl,
+      approved: false,
+      grade: null
     });
     all[idx] = a;
+    writeData(all);
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    return NextResponse.json({ error: 'invalid' }, { status: 400 });
+  }
+}
+
+export async function PUT(req: Request) {
+  try {
+    const body = await req.json();
+    const { assignmentId, studentId, grade } = body;
+    if (!assignmentId || !studentId || grade === undefined || grade === null) {
+      return NextResponse.json({ error: 'missing fields' }, { status: 400 });
+    }
+
+    const cookie = req.headers.get('cookie') || '';
+    const m = cookie.split(';').map(s => s.trim()).find(s => s.startsWith('auth='));
+    if (!m) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
+    let user: any = null;
+    try {
+      const token = m.split('=')[1];
+      user = JSON.parse(Buffer.from(token, 'base64').toString('utf8'));
+    } catch (e) {
+      return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
+    }
+
+    if (!['teacher', 'department_manager', 'admin'].includes(user.role)) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 403 });
+    }
+
+    const all = readData();
+    const idx = all.findIndex((a: any) => a.id === assignmentId);
+    if (idx === -1) return NextResponse.json({ error: 'not found' }, { status: 404 });
+    const assignment = all[idx];
+
+    if (user.role === 'department_manager' && assignment.departmentId && user.departmentId !== assignment.departmentId) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 403 });
+    }
+
+    assignment.completions = assignment.completions || [];
+    const completion = assignment.completions.find((c: any) => c.userId === studentId);
+    if (!completion) {
+      return NextResponse.json({ error: 'completion not found' }, { status: 404 });
+    }
+
+    completion.grade = Number(grade);
+    completion.approved = true;
+    completion.gradedBy = user.name || user.id;
+    completion.gradedAt = new Date().toISOString();
+
+    all[idx] = assignment;
     writeData(all);
     return NextResponse.json({ ok: true });
   } catch (e) {
