@@ -3274,7 +3274,7 @@ export default function Dashboard() {
                             acc.totalFull += full;
                             return acc;
                           }, { totalObtained: 0, totalFull: 0, bySubject: {} as Record<string, { obtained: number; full: number; count: number }> });
-                          const summarySubjects = Object.entries(gradeSummary.bySubject);
+                          const summarySubjects: [string, { obtained: number; full: number; count: number }][] = Object.entries(gradeSummary.bySubject);
 
                           return (
                             <div className={styles.cardGrid}>

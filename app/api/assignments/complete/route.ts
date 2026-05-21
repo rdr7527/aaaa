@@ -85,13 +85,9 @@ export async function POST(req: Request) {
       userId: user.id,
       userName: user.name || user.id,
       date: new Date().toISOString(),
-<<<<<<< HEAD
       fileUrl,
       approved: false,
       grade: null
-=======
-      fileUrl
->>>>>>> ae5763b00695e8882c826e6d0986831f72181dee
     });
     all[idx] = a;
     writeData(all);
@@ -101,7 +97,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'invalid' }, { status: 400 });
   }
 }
-<<<<<<< HEAD
 
 export async function PUT(req: Request) {
   try {
@@ -154,5 +149,3 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: 'invalid' }, { status: 400 });
   }
 }
-=======
->>>>>>> ae5763b00695e8882c826e6d0986831f72181dee
